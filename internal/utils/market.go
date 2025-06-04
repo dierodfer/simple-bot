@@ -6,53 +6,37 @@ import (
 	"strings"
 )
 
-func ExtractIdItemsGeneric(body string) []string {
+func ExtractLevels(body string) []string {
+	re := regexp.MustCompile(`Level (\d{1,4})`)
+	return extractRegex(body, re)
+}
+
+func ExtractIdObject(body string) []string {
 	re := regexp.MustCompile(`onclick="[^"]*retrieveItem\((\d+),`)
-	matches := re.FindAllStringSubmatch(body, -1)
-	var ids []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			ids = append(ids, match[1])
-		}
-	}
-	return ids
+	return extractRegex(body, re)
 }
 
 func ExtractIdItems(body string) []string {
 	re := regexp.MustCompile(`id="listing-(\d+)"`)
+	return extractRegex(body, re)
+}
+
+func extractRegex(body string, re *regexp.Regexp) []string {
 	matches := re.FindAllStringSubmatch(body, -1)
-	var ids []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			ids = append(ids, match[1])
-		}
+	elements := make([]string, 0, len(matches))
+	for _, m := range matches {
+		elements = append(elements, m[1])
 	}
-	return ids
+	return elements
 }
 
 func ExtractGoldAmounts(body string) []string {
-	goldRegex := regexp.MustCompile(`<td[^>]*>\s*<div[^>]*>\s*<img[^>]*src=['"]/img/icons/I_GoldCoin\.png['"][^>]*>\s*([\d,]*)`)
-	matches := goldRegex.FindAllStringSubmatch(body, -1)
-
-	var goldAmounts []string
-	for _, m := range matches {
-		amount := strings.ReplaceAll(m[1], ",", "")
-		if amount == "" {
-			amount = "0"
-		}
-		goldAmounts = append(goldAmounts, amount)
+	re := regexp.MustCompile(`<td[^>]*>\s*<div[^>]*>\s*<img[^>]*src=['"]/img/icons/I_GoldCoin\.png['"][^>]*>\s*([\d,]*)`)
+	amounts := extractRegex(body, re)
+	for i, amount := range amounts {
+		amounts[i] = strings.ReplaceAll(amount, ",", "")
 	}
-	return goldAmounts
-}
-
-func ExtractLevels(body string) []string {
-	levelRegex := regexp.MustCompile(`Level (\d{1,4})`)
-	matches := levelRegex.FindAllStringSubmatch(body, -1)
-	var levels []string
-	for _, m := range matches {
-		levels = append(levels, m[1])
-	}
-	return levels
+	return amounts
 }
 
 func ExtractInspectValue(body string) float64 {
@@ -60,8 +44,7 @@ func ExtractInspectValue(body string) float64 {
 	match := re.FindStringSubmatch(body)
 	if len(match) > 1 {
 		valueStr := strings.ReplaceAll(match[1], ",", "")
-		value, err := strconv.ParseFloat(valueStr, 64)
-		if err == nil {
+		if value, err := strconv.ParseFloat(valueStr, 64); err == nil {
 			return value
 		}
 	}

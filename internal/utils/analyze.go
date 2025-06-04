@@ -76,7 +76,7 @@ func AnalyzeMarket(store *keystore.Store, reqData *models.CurlRequest, urlListIt
 					}
 					levels := ExtractLevels(bodyString)
 					golds := ExtractGoldAmounts(bodyString)
-					idObjects := ExtractIdItemsGeneric(bodyString)
+					idObjects := ExtractIdObject(bodyString)
 					idItems := ExtractIdItems(bodyString)
 					if len(levels) == 0 || len(golds) == 0 || len(idObjects) == 0 || len(idItems) == 0 {
 						log.Printf("Warning: No data found for level %d-%d, page %d.", level, level+levelRange, page)
@@ -124,13 +124,13 @@ func ShowItems(itemList []models.MarketItem, page int, showAll bool) {
 	for _, lgr := range itemList {
 		diff := lgr.Diff()
 		if diff >= 10000 {
-			fmt.Printf("\033[33m Page: %v, Level %s => %.0f 🪙 | value: %.0f | diff: %.0f | id: %s \033[0m\n", page, lgr.Level, lgr.Gold, lgr.Value, diff, lgr.ID)
+			fmt.Printf("\033[33m Page: %v, %s \033[0m\n", page, lgr.String())
 		} else if diff >= 5000 {
-			fmt.Printf("\033[32m Page: %v, Level %s => %.0f 🪙 | value: %.0f | diff: %.0f | id: %s \033[0m\n", page, lgr.Level, lgr.Gold, lgr.Value, diff, lgr.ID)
+			fmt.Printf("\033[32m Page: %v, %s \033[0m\n", page, lgr.String())
 		} else if diff >= 1000 {
-			fmt.Printf(" Page: %v, Level %s => %.0f 🪙 | value: %.0f | diff: %.0f | id: %s\n", page, lgr.Level, lgr.Gold, lgr.Value, diff, lgr.ID)
+			fmt.Printf(" Page: %v, %s \n", page, lgr.String())
 		} else if showAll {
-			fmt.Printf(" Page: %v, Level %s => %.0f 🪙 | value: %.0f | diff: %.0f | id: %s\n", page, lgr.Level, lgr.Gold, lgr.Value, diff, lgr.ID)
+			fmt.Printf(" Page: %v, %s \n", page, lgr.String())
 		}
 	}
 }

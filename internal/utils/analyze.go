@@ -65,7 +65,7 @@ func AnalyzeMarket(store *keystore.Store, reqData *models.CurlRequest, urlListIt
 						Url:    urlListItems.Url,
 						Params: params,
 					}.String()
-					body, err := CallGetMethod(reqData, url)
+					body, err := GetMethod(reqData, url)
 					if err != nil {
 						log.Fatalf("Error haciendo petición para nivel %d, página %d: %v", level, page, err)
 					}
@@ -141,7 +141,7 @@ func InspectItemValue(reqData *models.CurlRequest, idGeneric string) float64 {
 		log.Fatal("APP_BASE_URL not set in .env file")
 	}
 	url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)
-	body, err := CallGetMethod(reqData, url)
+	body, err := GetMethod(reqData, url)
 	if err != nil {
 		log.Fatalf("Error haciendo petición: %v", err)
 	}

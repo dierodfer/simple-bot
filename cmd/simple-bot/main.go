@@ -47,14 +47,14 @@ func init() {
 }
 
 func main() {
+	fmt.Println("Iniciando base de datos...")
 	defer keystore.Database.Close()
-	fmt.Println("Iniciando análisis de mercado...")
 
 	log.Printf("Analizando artículos recientes...")
-	utils.AnalyzeMarket(urlListItems, 1, 0, 4500, 500, 15, true, false)
+	utils.AnalyzeMarket(urlListItems, 1, 0, 5500, 500, 20, true, false)
 	log.Printf("Analizando mercado en profundidad...")
-	utils.AnalyzeMarket(urlListItems, 1, 50, 3500, 50, 3, false, false)
-	//utils.AnalyzeInspectParallel(15, 121752, 200000, reqData)
+	utils.AnalyzeMarket(urlListItems, 1, 100, 5700, 100, 1, false, false)
+	//utils.AnalyzeInspectParallel(1, 0, 1)
 
 	//url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)
 

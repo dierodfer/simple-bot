@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func AnalyzeInspectParallel(threads int, startId int, endId int, reqData *models.CurlRequest) {
+func AnalyzeInspectParallel(threads int, startId int, endId int) {
 	idCh := make(chan int, threads)
 	doneCh := make(chan struct{}, threads)
 
@@ -79,11 +79,12 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 					idObjects := ExtractIdObject(bodyString)
 					idItems := ExtractIdItems(bodyString)
 					rarities := ExtractRarity(bodyString)
-					if len(levels) == 0 || len(golds) == 0 || len(idObjects) == 0 || len(idItems) == 0 || len(rarities) == 0 {
-						log.Printf("Warning: No data found for level %d-%d, page %d.", level, level+levelRange, page)
-						continue
+					typeObjects := ExtractTypeObject(bodyString)
+					if len(typeObjects) == 0 || len(levels) == 0 || len(golds) == 0 || len(idObjects) == 0 || len(idItems) == 0 || len(rarities) == 0 {
+						log.Printf("Warning: No data found for level %d-%d, page %d. Skipping next pages...", level, level+levelRange, page)
+						break
 					}
-					listItemsOrdered := CalculateDiffGold(idObjects, idItems, levels, golds, rarities)
+					listItemsOrdered := CalculateDiffGold(idObjects, idItems, levels, golds, rarities, typeObjects)
 					showItemsByDiff(listItemsOrdered, page, showAll)
 				}
 			}
@@ -91,7 +92,7 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 		}()
 	}
 
-	for level := minLevel; level <= maxLevel; level += levelRange {
+	for level := maxLevel; level >= minLevel; level -= levelRange {
 		levelCh <- level
 	}
 	close(levelCh)
@@ -101,7 +102,7 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 	}
 }
 
-func CalculateDiffGold(idObjects []string, idItems []string, levels []string, goldAmounts []string, rarities []string) []models.MarketItem {
+func CalculateDiffGold(idObjects []string, idItems []string, levels []string, goldAmounts []string, rarities []string, typeObjects []string) []models.MarketItem {
 	var itemList []models.MarketItem
 	if len(idObjects) != len(goldAmounts) {
 		log.Printf("Alert: idObject and golds have different lengths (idObject: %d, golds: %d)", len(idObjects), len(goldAmounts))
@@ -116,7 +117,7 @@ func CalculateDiffGold(idObjects []string, idItems []string, levels []string, go
 		}
 		value, _ := strconv.ParseFloat(valueStr, 64)
 		goldNum, _ := strconv.Atoi(goldAmounts[i])
-		itemList = append(itemList, models.MarketItem{ID: idItems[i], IDObject: idObjects[i], Level: levels[i], Gold: float64(goldNum), Value: value, Rarity: rarities[i]})
+		itemList = append(itemList, models.MarketItem{ID: idItems[i], IDObject: idObjects[i], Level: levels[i], Gold: float64(goldNum), Value: value, Rarity: rarities[i], Type: typeObjects[i]})
 	}
 	return itemList
 }

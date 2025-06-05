@@ -26,6 +26,11 @@ func ExtractRarity(body string) []string {
 	return extractRegex(body, re)
 }
 
+func ExtractTypeObject(body string) []string {
+	re := regexp.MustCompile(`<span[^>]*class="[^"]*-item border-0[^"]*"[^>]*>[^<]*</span>\s*([A-Za-z]+)`)
+	return extractRegex(body, re)
+}
+
 func extractRegex(body string, re *regexp.Regexp) []string {
 	matches := re.FindAllStringSubmatch(body, -1)
 	elements := make([]string, 0, len(matches))

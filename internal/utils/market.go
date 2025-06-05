@@ -21,6 +21,11 @@ func ExtractIdItems(body string) []string {
 	return extractRegex(body, re)
 }
 
+func ExtractRarity(body string) []string {
+	re := regexp.MustCompile(`<span class="[^"]*?-item[^"]*?">([^<]+)</span>`)
+	return extractRegex(body, re)
+}
+
 func extractRegex(body string, re *regexp.Regexp) []string {
 	matches := re.FindAllStringSubmatch(body, -1)
 	elements := make([]string, 0, len(matches))

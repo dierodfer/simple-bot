@@ -78,12 +78,13 @@ func AnalyzeMarket(store *keystore.Store, reqData *models.CurlRequest, urlListIt
 					golds := ExtractGoldAmounts(bodyString)
 					idObjects := ExtractIdObject(bodyString)
 					idItems := ExtractIdItems(bodyString)
-					if len(levels) == 0 || len(golds) == 0 || len(idObjects) == 0 || len(idItems) == 0 {
+					rarities := ExtractRarity(bodyString)
+					if len(levels) == 0 || len(golds) == 0 || len(idObjects) == 0 || len(idItems) == 0 || len(rarities) == 0 {
 						log.Printf("Warning: No data found for level %d-%d, page %d.", level, level+levelRange, page)
 						continue
 					}
-					listItemsOrdered := CalculateDiffGold(store, idObjects, idItems, levels, golds)
-					ShowItems(listItemsOrdered, page, showAll)
+					listItemsOrdered := CalculateDiffGold(idObjects, idItems, levels, golds, rarities)
+					showItemsByDiff(listItemsOrdered, page, showAll)
 				}
 			}
 			doneCh <- struct{}{}
@@ -100,7 +101,7 @@ func AnalyzeMarket(store *keystore.Store, reqData *models.CurlRequest, urlListIt
 	}
 }
 
-func CalculateDiffGold(store *keystore.Store, idObjects []string, idItems []string, levels []string, goldAmounts []string) []models.MarketItem {
+func CalculateDiffGold(idObjects []string, idItems []string, levels []string, goldAmounts []string, rarities []string) []models.MarketItem {
 	var itemList []models.MarketItem
 	if len(idObjects) != len(goldAmounts) {
 		log.Printf("Alert: idObject and golds have different lengths (idObject: %d, golds: %d)", len(idObjects), len(goldAmounts))
@@ -115,22 +116,26 @@ func CalculateDiffGold(store *keystore.Store, idObjects []string, idItems []stri
 		}
 		value, _ := strconv.ParseFloat(valueStr, 64)
 		goldNum, _ := strconv.Atoi(goldAmounts[i])
-		itemList = append(itemList, models.MarketItem{ID: idItems[i], IDObject: idObjects[i], Level: levels[i], Gold: float64(goldNum), Value: value})
+		itemList = append(itemList, models.MarketItem{ID: idItems[i], IDObject: idObjects[i], Level: levels[i], Gold: float64(goldNum), Value: value, Rarity: rarities[i]})
 	}
 	return itemList
 }
 
-func ShowItems(itemList []models.MarketItem, page int, showAll bool) {
-	for _, lgr := range itemList {
-		diff := lgr.Diff()
-		if diff >= 10000 {
-			fmt.Printf("\033[33m Page: %v, %s \033[0m\n", page, lgr.String())
+func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
+	for _, item := range itemList {
+		diff := item.Diff()
+		if diff > 15000 {
+			fmt.Printf("\033[96m Page: %v, %s \033[0m\n", page, item.String())
+		} else if diff >= 10000 {
+			fmt.Printf("\033[93m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 5000 {
-			fmt.Printf("\033[32m Page: %v, %s \033[0m\n", page, lgr.String())
+			fmt.Printf("\033[92m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 1000 {
-			fmt.Printf(" Page: %v, %s \n", page, lgr.String())
+			fmt.Printf(" Page: %v, %s \n", page, item.String())
 		} else if showAll {
-			fmt.Printf(" Page: %v, %s \n", page, lgr.String())
+			fmt.Printf(" Page: %v, %s \n", page, item.String())
+		} else if item.Rarity == "Celestial" && diff > -200000 {
+			fmt.Printf("\033[95m Page: %v, %s !!! Oportunity ¡¡¡ \033[0m\n", page, item.String())
 		}
 	}
 }

@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
+	config "simple-bot/configs"
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
 	"strconv"
 	"time"
 )
 
-func AnalyzeInspectParallel(store *keystore.Store, threads int, startId int, endId int, reqData *models.CurlRequest) {
+func AnalyzeInspectParallel(threads int, startId int, endId int, reqData *models.CurlRequest) {
 	idCh := make(chan int, threads)
 	doneCh := make(chan struct{}, threads)
 
@@ -19,10 +19,10 @@ func AnalyzeInspectParallel(store *keystore.Store, threads int, startId int, end
 		go func() {
 			for i := range idCh {
 				id := strconv.Itoa(i)
-				value := InspectItemValue(reqData, id)
+				value := InspectItemValue(id)
 				if value > 0 {
 					fmt.Printf("Item %s value: %.2f\n", id, value)
-					err := store.Set(id, fmt.Sprintf("%.0f", value))
+					err := keystore.Database.Set(id, fmt.Sprintf("%.0f", value))
 					if err != nil {
 						log.Printf("Error saving item %s: %v", id, err)
 					}
@@ -43,7 +43,7 @@ func AnalyzeInspectParallel(store *keystore.Store, threads int, startId int, end
 	}
 }
 
-func AnalyzeMarket(store *keystore.Store, reqData *models.CurlRequest, urlListItems models.ListItemsURL, threads int, minLevel int, maxLevel int, levelRange int, maxPages int, recentItems bool, showAll bool) {
+func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, maxLevel int, levelRange int, maxPages int, recentItems bool, showAll bool) {
 	levelCh := make(chan int, threads)
 	doneCh := make(chan struct{}, threads)
 
@@ -65,7 +65,7 @@ func AnalyzeMarket(store *keystore.Store, reqData *models.CurlRequest, urlListIt
 						Url:    urlListItems.Url,
 						Params: params,
 					}.String()
-					body, err := GetMethod(reqData, url)
+					body, err := HttpCall("GET", url)
 					if err != nil {
 						log.Fatalf("Error haciendo petición para nivel %d, página %d: %v", level, page, err)
 					}
@@ -110,7 +110,7 @@ func CalculateDiffGold(idObjects []string, idItems []string, levels []string, go
 
 	for i := range idObjects {
 		id := idObjects[i]
-		valueStr, found, _ := store.Get(id)
+		valueStr, found, _ := keystore.Database.Get(id)
 		if !found {
 			log.Printf("Item %s not found in database", id)
 		}
@@ -140,13 +140,10 @@ func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
 	}
 }
 
-func InspectItemValue(reqData *models.CurlRequest, idGeneric string) float64 {
-	baseURL := os.Getenv("APP_BASE_URL")
-	if baseURL == "" {
-		log.Fatal("APP_BASE_URL not set in .env file")
-	}
-	url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)
-	body, err := GetMethod(reqData, url)
+func InspectItemValue(idGeneric string) float64 {
+
+	url := fmt.Sprintf("%s/item/inspect/%s", config.BaseURL, idGeneric)
+	body, err := HttpCall("GET", url)
 	if err != nil {
 		log.Fatalf("Error haciendo petición: %v", err)
 	}

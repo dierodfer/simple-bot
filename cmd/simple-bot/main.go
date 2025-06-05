@@ -3,33 +3,24 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
+	config "simple-bot/configs"
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
 	"simple-bot/internal/utils"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 var (
 	start        time.Time
-	reqData      *models.CurlRequest
-	store        *keystore.Store
 	urlListItems models.ListItemsURL
 )
 
 func init() {
 	start = time.Now()
-	_ = godotenv.Load()
-
-	baseURL := os.Getenv("APP_BASE_URL")
-	if baseURL == "" {
-		log.Fatal("APP_BASE_URL not set in .env file")
-	}
+	config.InitVars()
 
 	urlListItems = models.ListItemsURL{
-		Url: baseURL + "/market/listings",
+		Url: config.BaseURL + "/market/listings",
 		Params: map[string]string{
 			"type[0]":   "Armour",
 			"type[1]":   "Shield",
@@ -44,27 +35,28 @@ func init() {
 		},
 	}
 
-	var err error
-	reqData, err = utils.ParseCurlFile("call.txt")
+	err := utils.InitHeadersAndCookie("call.txt")
 	if err != nil {
 		log.Fatalf("Error leyendo curl: %v", err)
 	}
 
-	store, err = keystore.NewStore("internal/database/data.db")
+	err = keystore.NewStore("internal/database/data.db")
 	if err != nil {
 		log.Fatal("Error to init database:", err)
 	}
 }
 
 func main() {
-	defer store.Close()
+	defer keystore.Database.Close()
 	fmt.Println("Iniciando análisis de mercado...")
 
 	log.Printf("Analizando artículos recientes...")
-	utils.AnalyzeMarket(store, reqData, urlListItems, 1, 0, 4500, 500, 15, true, false)
+	utils.AnalyzeMarket(urlListItems, 1, 0, 4500, 500, 15, true, false)
 	log.Printf("Analizando mercado en profundidad...")
-	utils.AnalyzeMarket(store, reqData, urlListItems, 1, 50, 3500, 50, 3, false, false)
-	//utils.AnalyzeInspectParallel(store, 15, 121752, 200000, reqData)
+	utils.AnalyzeMarket(urlListItems, 1, 50, 3500, 50, 3, false, false)
+	//utils.AnalyzeInspectParallel(15, 121752, 200000, reqData)
+
+	//url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Execution Time: %.3f seconds\n", elapsed.Seconds())

@@ -6,24 +6,25 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"simple-bot/internal/models"
 	"strings"
 )
 
-// GetMethod executes an HTTP request using the CurlRequest model.
-func GetMethod(reqData *models.CurlRequest, url string) ([]byte, error) {
+var Headers map[string]string
+var Cookie string
+
+// HttpCall executes an HTTP request using the CurlRequest model.
+func HttpCall(method string, url string) ([]byte, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest(reqData.Method, url, nil)
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	for k, v := range reqData.Headers {
+	for k, v := range Headers {
 		req.Header.Set(k, v)
 	}
-	if reqData.Cookies != "" {
-		req.Header.Set("Cookie", reqData.Cookies)
-	}
+
+	req.Header.Set("Cookie", Cookie)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -38,11 +39,11 @@ func GetMethod(reqData *models.CurlRequest, url string) ([]byte, error) {
 	return body, nil
 }
 
-// ParseCurlFile parses a curl command from a file into a CurlRequest struct.
-func ParseCurlFile(path string) (*models.CurlRequest, error) {
+// InitHeadersAndCookie initializes the Headers and Cookie variables from a file containing curl command options.
+func InitHeadersAndCookie(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 
@@ -68,17 +69,16 @@ func ParseCurlFile(path string) (*models.CurlRequest, error) {
 		cookie = match[1]
 	}
 
-	method := "GET"
-	if strings.Contains(content, "-X") {
-		methodRegex := regexp.MustCompile(`-X\s+['"]?(\w+)['"]?`)
-		if match := methodRegex.FindStringSubmatch(content); len(match) > 1 {
-			method = strings.ToUpper(match[1])
-		}
-	}
+	//method := "GET"
+	//if strings.Contains(content, "-X") {
+	//	methodRegex := regexp.MustCompile(`-X\s+['"]?(\w+)['"]?`)
+	//	if match := methodRegex.FindStringSubmatch(content); len(match) > 1 {
+	//		method = strings.ToUpper(match[1])
+	//	}
+	//}
 
-	return &models.CurlRequest{
-		Method:  method,
-		Headers: headers,
-		Cookies: cookie,
-	}, nil
+	Headers = headers
+	Cookie = cookie
+
+	return nil
 }

@@ -5,16 +5,17 @@ import (
 )
 
 var defaultBucket = []byte("kv")
+var Database = Store{}
 
 type Store struct {
 	db *bbolt.DB
 }
 
 // NewStore abre o crea el archivo de base de datos y asegura que exista el bucket
-func NewStore(path string) (*Store, error) {
+func NewStore(path string) error {
 	db, err := bbolt.Open(path, 0666, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Aseguramos que el bucket exista
@@ -24,10 +25,12 @@ func NewStore(path string) (*Store, error) {
 	})
 	if err != nil {
 		db.Close()
-		return nil, err
+		return err
 	}
 
-	return &Store{db: db}, nil
+	Database = Store{db: db}
+
+	return nil
 }
 
 // Set guarda una clave-valor

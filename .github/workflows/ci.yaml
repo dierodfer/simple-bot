@@ -1,0 +1,32 @@
+name: CI
+on:
+  schedule:
+    - cron: '0 8-23,0-1 * * *'  # Runs every hour except between 2am and 8am
+  workflow_dispatch:
+jobs:
+    analize-market:
+      name: Analyze Market Buy
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Fill env file
+          run: make fill-baseurl URL=${{secrets.APPLICATION_URL}}
+
+        - name: Fill call file
+          run: make fill-token URL=${{secrets.BEARRER_TOKEN}}
+
+        - name: Set up Go
+          uses: actions/setup-go@v5
+          with:
+            go-version-file: "go.mod"
+
+        - name: Run make go-run
+          run: make go-run
+
+        - name: Upload output file
+          uses: actions/upload-artifact@v4
+          with:
+            retention-days: 7
+            path: 'output.log'

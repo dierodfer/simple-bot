@@ -12,7 +12,13 @@ go-download: # Build the binary
 	@go mod download
 
 go-run: go-download # Run the binary
-	@go run cmd/simple-bot/main.go
+	@go run cmd/simple-bot/main.go > output.log
 
 go-build: go-download # Build the binary
 	@go build -o dev/simple-bot main.go
+
+fill-baseurl:
+	@echo "APP_BASE_URL=$(URL)" > .env || touch .env
+
+fill-token:
+	@echo "$(CALL)" >> call.txt || touch call.txt

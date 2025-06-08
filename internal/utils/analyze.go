@@ -86,19 +86,42 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 					}
 					listItemsOrdered := CalculateDiffGold(idObjects, idItems, levels, golds, rarities, typeObjects)
 					showItemsByDiff(listItemsOrdered, page, showAll)
+					buyAndSellItems(listItemsOrdered)
 				}
 			}
 			doneCh <- struct{}{}
 		}()
 	}
 
-	for level := maxLevel; level >= minLevel; level -= levelRange {
+	for level := minLevel; level <= maxLevel; level += levelRange {
 		levelCh <- level
 	}
 	close(levelCh)
 
 	for i := 0; i < threads; i++ {
 		<-doneCh
+	}
+}
+
+func buyAndSellItems(itemList []models.MarketItem) {
+	for _, item := range itemList {
+		//levelInt, _ := strconv.Atoi(item.Level)
+		if item.Diff() > 20000 {
+			url := fmt.Sprintf("%s/api/market/buy/%s", config.BaseURL, item.ID)
+			_, err := HttpCall("POST", url)
+			if err != nil {
+				log.Printf("Error buying item %s: %v", item.ID, err)
+			}
+
+			log.Printf("Bought item: %s", item.String())
+			//time.Sleep(time.Duration(1+rand.Intn(10)) * time.Second)
+			//url = fmt.Sprintf("%s/quicksell/item/%s", config.BaseURL, item.IDObject)
+			//_, err = HttpCall("POST", url)
+			//if err != nil {
+			//	log.Printf("Error selling item %s: %v", item.IDObject, err)
+			//}
+			//log.Printf("Sold item: %s gold earned: %.0f", item.String(), item.Diff())
+		}
 	}
 }
 
@@ -135,7 +158,7 @@ func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
 			fmt.Printf(" Page: %v, %s \n", page, item.String())
 		} else if showAll {
 			fmt.Printf(" Page: %v, %s \n", page, item.String())
-		} else if item.Rarity == "Celestial" && diff > -200000 {
+		} else if item.Rarity == "Celestial" && diff > -300000 {
 			fmt.Printf("\033[95m Page: %v, %s !!! Oportunity ¡¡¡ \033[0m\n", page, item.String())
 		}
 	}

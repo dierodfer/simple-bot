@@ -8,6 +8,7 @@ import (
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func AnalyzeInspectParallel(threads int, startId int, endId int) {
 				id := strconv.Itoa(i)
 				value := InspectItemValue(id)
 				if value > 0 {
-					fmt.Printf("Item %s value: %.2f\n", id, value)
+					log.Printf("Item %s value: %.2f\n", id, value)
 					err := keystore.Database.Set(id, fmt.Sprintf("%.0f", value))
 					if err != nil {
 						log.Printf("Error saving item %s: %v", id, err)
@@ -106,14 +107,18 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 func buyAndSellItems(itemList []models.MarketItem) {
 	for _, item := range itemList {
 		//levelInt, _ := strconv.Atoi(item.Level)
-		if item.Diff() > 20000 {
+		if item.Diff() > 10000 {
 			url := fmt.Sprintf("%s/api/market/buy/%s", config.BaseURL, item.ID)
-			_, err := HttpCall("POST", url)
+			body, err := HttpCall("POST", url)
 			if err != nil {
 				log.Printf("Error buying item %s: %v", item.ID, err)
 			}
+			if strings.Contains(string(body), "Something went wrong") {
+				log.Printf("Insufficient gold to buy item: %s (required: %v 🪙)", item.ID, item.Gold)
+			} else {
+				log.Printf("Item bought successfully: %s --> profit: %v", item.String(), item.Diff())
+			}
 
-			log.Printf("Bought item: %s", item.String())
 			//time.Sleep(time.Duration(1+rand.Intn(10)) * time.Second)
 			//url = fmt.Sprintf("%s/quicksell/item/%s", config.BaseURL, item.IDObject)
 			//_, err = HttpCall("POST", url)
@@ -149,17 +154,17 @@ func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
 	for _, item := range itemList {
 		diff := item.Diff()
 		if diff > 15000 {
-			fmt.Printf("\033[96m Page: %v, %s \033[0m\n", page, item.String())
+			log.Printf("\033[96m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 10000 {
-			fmt.Printf("\033[93m Page: %v, %s \033[0m\n", page, item.String())
+			log.Printf("\033[93m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 5000 {
-			fmt.Printf("\033[92m Page: %v, %s \033[0m\n", page, item.String())
+			log.Printf("\033[92m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 1000 {
-			fmt.Printf(" Page: %v, %s \n", page, item.String())
+			log.Printf(" Page: %v, %s \n", page, item.String())
 		} else if showAll {
-			fmt.Printf(" Page: %v, %s \n", page, item.String())
+			log.Printf(" Page: %v, %s \n", page, item.String())
 		} else if item.Rarity == "Celestial" && diff > -300000 {
-			fmt.Printf("\033[95m Page: %v, %s !!! Oportunity ¡¡¡ \033[0m\n", page, item.String())
+			log.Printf("\033[95m Page: %v, %s !!! Oportunity ¡¡¡ \033[0m\n", page, item.String())
 		}
 	}
 }

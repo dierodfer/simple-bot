@@ -59,5 +59,5 @@ func main() {
 	//url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)
 
 	elapsed := time.Since(start)
-	fmt.Printf("Execution Time: %.3f seconds\n", elapsed.Seconds())
+	log.Printf("Execution Time: %.3f seconds\n", elapsed.Seconds())
 }

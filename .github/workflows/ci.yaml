@@ -15,7 +15,8 @@ jobs:
           run: make fill-baseurl URL=${{secrets.APPLICATION_URL}}
 
         - name: Fill call file
-          run: make fill-token URL=${{secrets.BEARRER_TOKEN}}
+          run: |
+            echo "${{secrets.BEARRER_TOKEN}}" | base64 -d > call.txt
 
         - name: Set up Go
           uses: actions/setup-go@v5

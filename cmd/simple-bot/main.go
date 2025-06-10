@@ -52,8 +52,8 @@ func main() {
 
 	log.Printf("Analizando artículos recientes...")
 	utils.AnalyzeMarket(urlListItems, 1, 0, 5500, 500, 20, true, false)
-	log.Printf("Analizando mercado en profundidad...")
-	utils.AnalyzeMarket(urlListItems, 1, 100, 5700, 100, 1, false, false)
+	//log.Printf("Analizando mercado en profundidad...")
+	//utils.AnalyzeMarket(urlListItems, 1, 100, 5700, 100, 1, false, false)
 	//utils.AnalyzeInspectParallel(1, 0, 1)
 
 	//url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)

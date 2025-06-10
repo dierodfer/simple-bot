@@ -106,17 +106,16 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 
 func buyAndSellItems(itemList []models.MarketItem) {
 	for _, item := range itemList {
-		//levelInt, _ := strconv.Atoi(item.Level)
-		if item.Diff() > 10000 {
+		if item.Diff() > 20000 {
 			url := fmt.Sprintf("%s/api/market/buy/%s", config.BaseURL, item.ID)
 			body, err := HttpCall("POST", url)
 			if err != nil {
 				log.Printf("Error buying item %s: %v", item.ID, err)
 			}
 			if strings.Contains(string(body), "Something went wrong") {
-				log.Printf("Insufficient gold to buy item: %s (required: %v 🪙)", item.ID, item.Gold)
+				log.Printf("\033[91mInsufficient gold to buy item: %s (required: %v 🪙)\033[0m", item.ID, item.Gold)
 			} else {
-				log.Printf("Item bought successfully: %s --> profit: %v", item.String(), item.Diff())
+				log.Printf("Item bought successfully: %s --> profit: %v", item.ID, item.Diff())
 			}
 
 			//time.Sleep(time.Duration(1+rand.Intn(10)) * time.Second)

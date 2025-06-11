@@ -106,7 +106,7 @@ func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, 
 
 func buyAndSellItems(itemList []models.MarketItem) {
 	for _, item := range itemList {
-		if item.Diff() > 20000 {
+		if item.Diff() > 15000 {
 			url := fmt.Sprintf("%s/api/market/buy/%s", config.BaseURL, item.ID)
 			body, err := HttpCall("POST", url)
 			if err != nil {
@@ -162,7 +162,7 @@ func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
 			log.Printf(" Page: %v, %s \n", page, item.String())
 		} else if showAll {
 			log.Printf(" Page: %v, %s \n", page, item.String())
-		} else if item.Rarity == "Celestial" && diff > -300000 {
+		} else if item.Rarity == "Celestial" && diff > -500000 {
 			log.Printf("\033[95m Page: %v, %s !!! Oportunity ¡¡¡ \033[0m\n", page, item.String())
 		}
 	}

@@ -156,8 +156,8 @@ func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
 			log.Printf("\033[96m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 10000 {
 			log.Printf("\033[93m Page: %v, %s \033[0m\n", page, item.String())
-		} else if diff >= 5000 {
-			log.Printf("\033[92m Page: %v, %s \033[0m\n", page, item.String())
+		// } else if diff >= 5000 {
+		// 	log.Printf("\033[92m Page: %v, %s \033[0m\n", page, item.String())
 		} else if diff >= 1000 {
 			log.Printf(" Page: %v, %s \n", page, item.String())
 		} else if showAll {

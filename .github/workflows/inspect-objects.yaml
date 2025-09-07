@@ -11,8 +11,8 @@ on:
             description: 'End ID'
             required: true
 jobs:
-    analize-market:
-      name: Analyze Market Buy
+    inspect-objects:
+      name: Inspect Objects
       runs-on: ubuntu-latest
       steps:
         - name: Checkout code

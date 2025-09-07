@@ -38,5 +38,5 @@ jobs:
           uses: actions/upload-artifact@v4
           with:
             retention-days: 7
-            path: '*/data.db'
+            path: '**/data.db'
 

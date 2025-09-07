@@ -1,8 +1,15 @@
-name: CI
+name: Inspect Objects
 on:
-  schedule:
-    - cron: '0 8-22/2 * * *'  # Runs every hour except between 2am and 8am
+#  schedule:
+#    - cron: '0 8-22/2 * * *'  # Runs every hour except between 2am and 8am
   workflow_dispatch:
+    inputs:
+        init:
+            description: 'Init ID'
+            required: true
+        end:
+            description: 'End ID'
+            required: true
 jobs:
     analize-market:
       name: Analyze Market Buy
@@ -24,10 +31,12 @@ jobs:
             go-version-file: "go.mod"
 
         - name: Run analyze market
-          run: make analyze-market
+          run: make inspect-items INIT=${{ inputs.init }} END=${{ inputs.end }}
 
-        - name: Upload output file
+
+        - name: Upload database file
           uses: actions/upload-artifact@v4
           with:
             retention-days: 7
-            path: 'output.log'
+            path: '*/data.db'
+

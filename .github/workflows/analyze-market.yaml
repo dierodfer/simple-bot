@@ -1,0 +1,33 @@
+name: Analyze Market
+on:
+  schedule:
+    - cron: '0 8-22/2 * * *'  # Runs every hour except between 2am and 8am
+  workflow_dispatch:
+jobs:
+    analize-market:
+      name: Analyze Market Buy
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Fill env file
+          run: make fill-baseurl URL=${{secrets.APPLICATION_URL}}
+
+        - name: Fill call file
+          run: |
+            echo "${{secrets.BEARRER_TOKEN}}" | base64 -d > call.txt
+
+        - name: Set up Go
+          uses: actions/setup-go@v5
+          with:
+            go-version-file: "go.mod"
+
+        - name: Run analyze market
+          run: make analyze-market
+
+        - name: Upload output file
+          uses: actions/upload-artifact@v4
+          with:
+            retention-days: 7
+            path: 'output.log'

@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	config "simple-bot/configs"
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
 	"simple-bot/internal/utils"
+	"strconv"
 	"time"
 )
 
@@ -50,13 +52,20 @@ func main() {
 	fmt.Println("Iniciando base de datos...")
 	defer keystore.Database.Close()
 
-	log.Printf("Analizando artículos recientes...")
-	utils.AnalyzeMarket(urlListItems, 1, 0, 5500, 500, 20, true, false)
-	//log.Printf("Analizando mercado en profundidad...")
-	//utils.AnalyzeMarket(urlListItems, 1, 100, 5700, 100, 1, false, false)
-	//utils.AnalyzeInspectParallel(1, 0, 1)
+	if len(os.Args) == 0 {
+		log.Fatal("Seleccione una acción: inspect o analyze")
+	}
 
-	//url := fmt.Sprintf("%s/item/inspect/%s", baseURL, idGeneric)
+	switch os.Args[1] {
+	case "inspect":
+		initVal, _ := strconv.Atoi(os.Args[2])
+		endVal, _ := strconv.Atoi(os.Args[3])
+		log.Printf("Inspeccionando items en rango %d-%d...", initVal, endVal)
+		utils.AnalyzeInspectParallel(3, initVal, endVal)
+	case "analyze":
+		log.Printf("Analizando artículos recientes...")
+		utils.AnalyzeMarket(urlListItems, 1, 0, 5500, 500, 20, true, false)
+	}
 
 	elapsed := time.Since(start)
 	log.Printf("Execution Time: %.3f seconds\n", elapsed.Seconds())

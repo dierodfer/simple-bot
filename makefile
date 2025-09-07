@@ -11,11 +11,21 @@ NC='\033[0m' # No Color
 go-download: # Build the binary
 	@go mod download
 
-go-run: go-download # Run the binary
-	@go run cmd/simple-bot/main.go > output.log
-
 go-build: go-download # Build the binary
-	@go build -o dev/simple-bot main.go
+	@mkdir -p dev
+	@go build -o dev/simple-bot ./cmd/simple-bot
+
+analyze-market: go-build # Run the binary
+	@go run cmd/simple-bot/main.go analyze > output.log
+
+inspect-items: go-build
+ifeq ($(strip $(INIT)), )
+	$(error INIT is not set)
+endif
+ifeq ($(strip $(END)), )
+	$(error END is not set)
+endif
+	@go run cmd/simple-bot/main.go inspect $(INIT) $(END) > output.log
 
 fill-baseurl:
 	@echo "APP_BASE_URL=$(URL)" > .env || touch .env

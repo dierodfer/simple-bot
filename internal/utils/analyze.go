@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -45,14 +47,14 @@ func AnalyzeInspectParallel(httpClient *HTTPClient, store keystore.KeyValueStore
 			defer wg.Done()
 			for i := range idCh {
 				id := strconv.Itoa(i)
-				value, err := inspectItemValue(httpClient, baseURL, id)
+				stats, err := inspectItemStats(httpClient, baseURL, id)
 				if err != nil {
 					log.Printf("Error inspecting item %s: %v", id, err)
 					continue
 				}
-				if value > 0 {
-					log.Printf("Item %s value: %.2f\n", id, value)
-					if err := store.Set(id, fmt.Sprintf("%.0f", value)); err != nil {
+				if stats.Value > 0 {
+					log.Printf("Item %s value: %.2f\n", id, stats.Value)
+					if err := store.Set(id, fmt.Sprintf("%.0f", stats.Value)); err != nil {
 						log.Printf("Error saving item %s: %v", id, err)
 					}
 				}
@@ -154,6 +156,7 @@ func parseMarketPage(store keystore.KeyValueStore, body string) []models.MarketI
 			log.Printf("Invalid gold amount for item %s: %v", idItems[i], err)
 			continue
 		}
+
 		items = append(items, models.MarketItem{
 			ID: idItems[i], IDObject: idObjects[i],
 			Level: levels[i], Gold: float64(goldNum), Value: value,
@@ -168,16 +171,102 @@ func buyProfitableItems(httpClient *HTTPClient, baseURL string, items []models.M
 		if item.Diff() <= ProfitThresholdBuy {
 			continue
 		}
-		body, err := httpClient.Do("POST", fmt.Sprintf("%s/api/market/buy/%s", baseURL, item.ID))
+		success, msg := BuyItem(httpClient, baseURL, item)
+		if success {
+			log.Printf("Item bought successfully: %s --> profit: %v", item.ID, item.Diff())
+		} else {
+			log.Printf("\033[91m%s: %s\033[0m", item.ID, msg)
+		}
+	}
+}
+
+// BuyItem attempts to buy a single market item and returns success status with a message.
+func BuyItem(httpClient *HTTPClient, baseURL string, item models.MarketItem) (bool, string) {
+	body, err := httpClient.Do("POST", fmt.Sprintf("%s/api/market/buy/%s", baseURL, item.ID))
+	if err != nil {
+		return false, fmt.Sprintf("Error: %v", err)
+	}
+	if strings.Contains(string(body), "Something went wrong") {
+		return false, fmt.Sprintf("Insufficient gold (need %.0f)", item.Gold)
+	}
+	return true, fmt.Sprintf("Profit: %.0f", item.Diff())
+}
+
+// RefreshItemValue inspects an item by ID and persists its current value in the local store.
+func RefreshItemValue(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL, id string) (float64, error) {
+	stats, err := inspectItemStats(httpClient, baseURL, id)
+	if err != nil {
+		return 0, err
+	}
+	if err := store.Set(id, fmt.Sprintf("%.0f", stats.Value)); err != nil {
+		return 0, fmt.Errorf("saving refreshed value for %s: %w", id, err)
+	}
+	return stats.Value, nil
+}
+
+// ScanMarket scans the market and sends discovered items through the provided channel.
+// Reuses parseMarketPage for HTML parsing and CopyParams for parameter handling.
+func ScanMarket(ctx context.Context, httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions, itemCh chan<- models.MarketItem) {
+	defer close(itemCh)
+	for level := opts.MinLevel; level <= opts.MaxLevel; level += opts.LevelRange {
+		if !sleepWithContext(ctx, time.Duration(1+rand.Intn(5))*time.Second) {
+			return
+		}
+		if !scanLevelRange(ctx, httpClient, store, baseURL, opts, level, itemCh) {
+			return
+		}
+	}
+}
+
+func scanLevelRange(ctx context.Context, httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions, level int, itemCh chan<- models.MarketItem) bool {
+	params := CopyParams(opts.URLListItems.Params)
+	if opts.RecentItems {
+		params["order"] = "desc"
+		params["order_col"] = "date"
+	}
+	params["min_level"] = strconv.Itoa(level)
+	params["max_level"] = strconv.Itoa(level + opts.LevelRange)
+
+	for page := 1; page <= opts.MaxPages; page++ {
+		if !sleepWithContext(ctx, time.Duration(1+rand.Intn(2))*time.Second) {
+			return false
+		}
+		params["page"] = strconv.Itoa(page)
+		url := models.ListItemsURL{Url: opts.URLListItems.Url, Params: params}.String()
+
+		body, err := httpClient.Do("GET", url)
 		if err != nil {
-			log.Printf("Error buying item %s: %v", item.ID, err)
 			continue
 		}
-		if strings.Contains(string(body), "Something went wrong") {
-			log.Printf("\033[91mInsufficient gold to buy item: %s (required: %v)\033[0m", item.ID, item.Gold)
-		} else {
-			log.Printf("Item bought successfully: %s --> profit: %v", item.ID, item.Diff())
+		html := string(body)
+		if CheckTooQuickErrorPage(html) {
+			continue
 		}
+		items := parseMarketPage(store, html)
+		if len(items) == 0 {
+			break
+		}
+		for _, item := range items {
+			select {
+			case <-ctx.Done():
+				return false
+			case itemCh <- item:
+			}
+		}
+	}
+
+	return true
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
@@ -197,12 +286,27 @@ func logItems(items []models.MarketItem, page int, showAll bool) {
 	}
 }
 
-func inspectItemValue(httpClient *HTTPClient, baseURL, id string) (float64, error) {
-	body, err := httpClient.Do("GET", fmt.Sprintf("%s/item/inspect/%s", baseURL, id))
+type itemStatsSnapshot struct {
+	Value float64
+}
+
+func inspectItemStats(httpClient *HTTPClient, baseURL, id string) (itemStatsSnapshot, error) {
+	body, err := httpClient.Do("POST", fmt.Sprintf("%s/api/item/stats-v2/%s", baseURL, id))
 	if err != nil {
-		return 0, fmt.Errorf("inspecting item %s: %w", id, err)
+		return itemStatsSnapshot{}, fmt.Errorf("inspecting item %s: %w", id, err)
 	}
-	return ExtractInspectValue(string(body)), nil
+
+	var payload models.ItemStatsResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return itemStatsSnapshot{}, fmt.Errorf("decoding item stats for %s: %w", id, err)
+	}
+	if !payload.Success {
+		return itemStatsSnapshot{}, fmt.Errorf("item stats request failed for %s", id)
+	}
+
+	return itemStatsSnapshot{
+		Value: payload.Item.Value,
+	}, nil
 }
 
 func smallestLen(slices ...[]string) int {

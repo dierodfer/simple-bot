@@ -29,9 +29,6 @@ Simple Bot is a modern Go application for analyzing and automating item manageme
 - `analyze`: market analysis in terminal logs
 - `ui`: interactive TUI (scan + local DB management)
 
-## Local DB UX
-- `update range` progress shows completion percentage (`%`) and failures while processing IDs.
-
 ## Internal Modules (Detailed)
 - `cmd/simple-bot/main.go`
    - Entry point
@@ -47,52 +44,39 @@ Simple Bot is a modern Go application for analyzing and automating item manageme
 - `internal/models`
    - DTOs and domain models for market items and inspect payloads
 
-## Architecture Diagram
-```mermaid
-flowchart TB
-      CLI[cmd/simple-bot/main.go] --> CFG[configs/config.go\nLoad .env and APP_BASE_URL]
-      CLI --> HTTP[internal/utils/http.go\nHTTP client from call.txt]
-      CLI --> DB[internal/database/keystore.go\nbbolt Store]
-
-      CLI --> MODE{Execution mode}
-      MODE --> INSPECT[inspect]
-      MODE --> ANALYZE[analyze]
-      MODE --> UI[ui]
-
-      INSPECT --> AIP[utils.AnalyzeInspectParallel]
-      ANALYZE --> AM[utils.AnalyzeMarket]
-      UI --> APP[internal/ui/app.go\nBubble Tea Model]
-      APP --> SM[utils.ScanMarket]
-      APP --> REFRESH[utils.RefreshItemValue]
-
-      AIP --> STATS[(POST /api/item/stats-v2/:id)]
-      AM --> LIST[(GET /market/listings)]
-      SM --> LIST
-      REFRESH --> STATS
-
-      STATS --> PARSE[utils.inspectItemStats\nvalue]
-      PARSE --> DB
-      LIST --> MP[utils.parseMarketPage]
-      MP --> DB
-
-      DB --> KV[(bucket: kv)]
-```
-
 ## Internal Functional Flow (Modules)
 ```mermaid
 flowchart TD
-      START[UI mode: start scan] --> UISCAN[internal/ui/app.go\nstartScan -> ScanMarket]
-      UISCAN --> SCAN[internal/utils/analyze.go\nscanLevelRange]
-      SCAN --> FETCHLIST[HTTP GET /market/listings]
-      FETCHLIST --> PARSEPAGE[parseMarketPage]
+      START[Application start] --> CHOICE{Choose Mode}
 
-      PARSEPAGE --> FORITEM{For each parsed item}
-      FORITEM --> GETVALUE[Store.Get item value]
-      GETVALUE --> BUILD[Build MarketItem\nGold + Value]
+      CHOICE --> INSPECT[inspect mode]
+      CHOICE --> ANALYZE[analyze mode]
+      CHOICE --> UI[ui mode]
 
-      BUILD --> VIEW[UI renderRow\nshow Cost, Value, Profit]
-      VIEW --> DECIDE{Profitable?}
-      DECIDE -->|yes| BUY[BuyItem POST /api/market/buy/:id]
-      DECIDE -->|no| NEXT[Next item/page]
-      BUY --> NEXT
+   INSPECT --> STATS[stats-v2 API]
+      STATS --> STORE1[save value in bbolt]
+
+   ANALYZE --> LIST1[market listings API]
+      LIST1 --> PARSE1[parse listings + read stored values]
+      PARSE1 --> BUY1{profitable item}
+      BUY1 -->|yes| BUYAPI[buy API]
+      BUY1 -->|no| END1[continue analysis]
+      BUYAPI --> END1
+
+   UI --> UICHOICE{User action in UI}
+      UICHOICE --> SCAN[Scan market]
+      UICHOICE --> DBVIEW[Local DB view]
+
+      SCAN --> LIST2[market listings API]
+      LIST2 --> PARSE2[parse listings + render rows]
+
+      DBVIEW --> DBACT{DB action}
+      DBACT --> UPDATEONE[update selected]
+      DBACT --> UPDATERANGE[update range]
+      DBACT --> SEARCH[search / browse]
+
+      UPDATEONE --> STATS2[stats-v2 API]
+      STATS2 --> STORE2[update value in bbolt]
+      UPDATERANGE --> STATS2
+      SEARCH --> READDB[read from bbolt]
 ```

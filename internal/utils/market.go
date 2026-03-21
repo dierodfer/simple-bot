@@ -6,71 +6,82 @@ import (
 	"strings"
 )
 
+// Pre-compiled regular expressions for HTML scraping.
+// Compiled once at package init to avoid repeated compilation overhead.
+var (
+	reLevels     = regexp.MustCompile(`Level (\d{1,4})`)
+	reIdObject   = regexp.MustCompile(`onclick="[^"]*retrieveItem\((\d+),`)
+	reIdItems    = regexp.MustCompile(`id="listing-(\d+)"`)
+	reRarity     = regexp.MustCompile(`<span class="[^"]*?-item[^"]*?">([^<]+)</span>`)
+	reTypeObject = regexp.MustCompile(`<span[^>]*class="[^"]*-item border-0[^"]*"[^>]*>[^<]*</span>\s*([A-Za-z]+)`)
+	reGold       = regexp.MustCompile(`<td[^>]*>\s*<div[^>]*>\s*<img[^>]*src=['"]/img/icons/I_GoldCoin\.png['"][^>]*>\s*([\d,]*)`)
+	reInspect    = regexp.MustCompile(`(?i)<div[^>]*>\s*Value\s*</div>\s*<div[^>]*>\s*([\d,]+)\s*</div>`)
+	reTooQuick   = regexp.MustCompile(`<p class="[^"]*">\s*You are doing this too quickly\. Please wait a short while before doing it again\.\s*</p>`)
+)
+
 func ExtractLevels(body string) []string {
-	re := regexp.MustCompile(`Level (\d{1,4})`)
-	return extractRegex(body, re)
+	return extractRegex(body, reLevels)
 }
 
 func ExtractIdObject(body string) []string {
-	re := regexp.MustCompile(`onclick="[^"]*retrieveItem\((\d+),`)
-	return extractRegex(body, re)
+	return extractRegex(body, reIdObject)
 }
 
 func ExtractIdItems(body string) []string {
-	re := regexp.MustCompile(`id="listing-(\d+)"`)
-	return extractRegex(body, re)
+	return extractRegex(body, reIdItems)
 }
 
 func ExtractRarity(body string) []string {
-	re := regexp.MustCompile(`<span class="[^"]*?-item[^"]*?">([^<]+)</span>`)
-	return extractRegex(body, re)
+	return extractRegex(body, reRarity)
 }
 
 func ExtractTypeObject(body string) []string {
-	re := regexp.MustCompile(`<span[^>]*class="[^"]*-item border-0[^"]*"[^>]*>[^<]*</span>\s*([A-Za-z]+)`)
-	return extractRegex(body, re)
+	return extractRegex(body, reTypeObject)
 }
 
 func extractRegex(body string, re *regexp.Regexp) []string {
 	matches := re.FindAllStringSubmatch(body, -1)
 	elements := make([]string, 0, len(matches))
 	for _, m := range matches {
-		elements = append(elements, m[1])
+		if len(m) > 1 {
+			elements = append(elements, m[1])
+		}
 	}
 	return elements
 }
 
 func ExtractGoldAmounts(body string) []string {
-	re := regexp.MustCompile(`<td[^>]*>\s*<div[^>]*>\s*<img[^>]*src=['"]/img/icons/I_GoldCoin\.png['"][^>]*>\s*([\d,]*)`)
-	amounts := extractRegex(body, re)
+	amounts := extractRegex(body, reGold)
 	for i, amount := range amounts {
-		amounts[i] = strings.ReplaceAll(amount, ",", "")
+		amounts[i] = sanitizeNumber(amount)
 	}
 	return amounts
 }
 
 func ExtractInspectValue(body string) float64 {
-	re := regexp.MustCompile(`(?i)<div[^>]*>\s*Value\s*</div>\s*<div[^>]*>\s*([\d,]+)\s*</div>`)
-	match := re.FindStringSubmatch(body)
-	if len(match) > 1 {
-		valueStr := strings.ReplaceAll(match[1], ",", "")
-		if value, err := strconv.ParseFloat(valueStr, 64); err == nil {
-			return value
-		}
+	match := reInspect.FindStringSubmatch(body)
+	if len(match) <= 1 {
+		return 0
 	}
-	return 0
+	value, err := strconv.ParseFloat(sanitizeNumber(match[1]), 64)
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 func CheckTooQuickErrorPage(body string) bool {
-	regex := `<p class="[^"]*">\s*You are doing this too quickly\. Please wait a short while before doing it again\.\s*</p>`
-	matched, _ := regexp.MatchString(regex, body)
-	return matched
+	return reTooQuick.MatchString(body)
 }
 
 func CopyParams(params map[string]string) map[string]string {
-	copyVars := make(map[string]string)
+	cloned := make(map[string]string, len(params))
 	for k, v := range params {
-		copyVars[k] = v
+		cloned[k] = v
 	}
-	return copyVars
+	return cloned
+}
+
+func sanitizeNumber(value string) string {
+	return strings.ReplaceAll(value, ",", "")
 }

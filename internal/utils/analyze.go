@@ -4,176 +4,216 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	config "simple-bot/configs"
-	keystore "simple-bot/internal/database"
-	"simple-bot/internal/models"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	keystore "simple-bot/internal/database"
+	"simple-bot/internal/models"
 )
 
-func AnalyzeInspectParallel(threads int, startId int, endId int) {
+// Profit thresholds for market analysis decisions.
+const (
+	ProfitThresholdBuy       = 15000
+	ProfitThresholdHighlight = 10000
+	ProfitThresholdShow      = 1000
+	CelestialMaxLoss         = -500000
+)
+
+// MarketOptions holds the parameters for a market analysis run.
+type MarketOptions struct {
+	URLListItems models.ListItemsURL
+	Threads      int
+	MinLevel     int
+	MaxLevel     int
+	LevelRange   int
+	MaxPages     int
+	RecentItems  bool
+	ShowAll      bool
+}
+
+// AnalyzeInspectParallel inspects item values in parallel across the given ID range
+// and stores results in the provided key-value store.
+func AnalyzeInspectParallel(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, threads, startID, endID int) {
+	var wg sync.WaitGroup
 	idCh := make(chan int, threads)
-	doneCh := make(chan struct{}, threads)
 
 	for w := 0; w < threads; w++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for i := range idCh {
 				id := strconv.Itoa(i)
-				value := InspectItemValue(id)
+				value, err := inspectItemValue(httpClient, baseURL, id)
+				if err != nil {
+					log.Printf("Error inspecting item %s: %v", id, err)
+					continue
+				}
 				if value > 0 {
 					log.Printf("Item %s value: %.2f\n", id, value)
-					err := keystore.Database.Set(id, fmt.Sprintf("%.0f", value))
-					if err != nil {
+					if err := store.Set(id, fmt.Sprintf("%.0f", value)); err != nil {
 						log.Printf("Error saving item %s: %v", id, err)
 					}
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
-			doneCh <- struct{}{}
 		}()
 	}
 
-	for i := startId; i <= endId; i++ {
+	for i := startID; i <= endID; i++ {
 		idCh <- i
 	}
 	close(idCh)
-
-	for w := 0; w < threads; w++ {
-		<-doneCh
-	}
+	wg.Wait()
 }
 
-func AnalyzeMarket(urlListItems models.ListItemsURL, threads int, minLevel int, maxLevel int, levelRange int, maxPages int, recentItems bool, showAll bool) {
-	levelCh := make(chan int, threads)
-	doneCh := make(chan struct{}, threads)
+// AnalyzeMarket scans the market across level ranges and identifies profitable items.
+func AnalyzeMarket(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions) {
+	var wg sync.WaitGroup
+	levelCh := make(chan int, opts.Threads)
 
-	for i := 0; i < threads; i++ {
+	for i := 0; i < opts.Threads; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for level := range levelCh {
 				time.Sleep(time.Duration(1+rand.Intn(10)) * time.Second)
-				params := CopyParams(urlListItems.Params)
-				if recentItems {
-					params["order"] = "desc"
-					params["order_col"] = "date"
-				}
-				params["min_level"] = strconv.Itoa(level)
-				params["max_level"] = strconv.Itoa(level + levelRange)
-				for page := 1; page <= maxPages; page++ {
-					time.Sleep(time.Duration(1+rand.Intn(2)) * time.Second)
-					params["page"] = strconv.Itoa(page)
-					url := models.ListItemsURL{
-						Url:    urlListItems.Url,
-						Params: params,
-					}.String()
-					body, err := HttpCall("GET", url)
-					if err != nil {
-						log.Fatalf("Error haciendo petición para nivel %d, página %d: %v", level, page, err)
-					}
-					bodyString := string(body)
-					if CheckTooQuickErrorPage(bodyString) {
-						log.Printf("Error Page detected: Please increise time to wait between calls.")
-						continue
-					}
-					levels := ExtractLevels(bodyString)
-					golds := ExtractGoldAmounts(bodyString)
-					idObjects := ExtractIdObject(bodyString)
-					idItems := ExtractIdItems(bodyString)
-					rarities := ExtractRarity(bodyString)
-					typeObjects := ExtractTypeObject(bodyString)
-					if len(typeObjects) == 0 || len(levels) == 0 || len(golds) == 0 || len(idObjects) == 0 || len(idItems) == 0 || len(rarities) == 0 {
-						log.Printf("Warning: No data found for level %d-%d, page %d. Skipping next pages...", level, level+levelRange, page)
-						break
-					}
-					listItemsOrdered := CalculateDiffGold(idObjects, idItems, levels, golds, rarities, typeObjects)
-					showItemsByDiff(listItemsOrdered, page, showAll)
-					buyAndSellItems(listItemsOrdered)
-				}
+				processLevelRange(httpClient, store, baseURL, opts, level)
 			}
-			doneCh <- struct{}{}
 		}()
 	}
 
-	for level := minLevel; level <= maxLevel; level += levelRange {
+	for level := opts.MinLevel; level <= opts.MaxLevel; level += opts.LevelRange {
 		levelCh <- level
 	}
 	close(levelCh)
-
-	for i := 0; i < threads; i++ {
-		<-doneCh
-	}
+	wg.Wait()
 }
 
-func buyAndSellItems(itemList []models.MarketItem) {
-	for _, item := range itemList {
-		if item.Diff() > 15000 {
-			url := fmt.Sprintf("%s/api/market/buy/%s", config.BaseURL, item.ID)
-			body, err := HttpCall("POST", url)
-			if err != nil {
-				log.Printf("Error buying item %s: %v", item.ID, err)
-			}
-			if strings.Contains(string(body), "Something went wrong") {
-				log.Printf("\033[91mInsufficient gold to buy item: %s (required: %v 🪙)\033[0m", item.ID, item.Gold)
-			} else {
-				log.Printf("Item bought successfully: %s --> profit: %v", item.ID, item.Diff())
-			}
+func processLevelRange(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions, level int) {
+	params := CopyParams(opts.URLListItems.Params)
+	if opts.RecentItems {
+		params["order"] = "desc"
+		params["order_col"] = "date"
+	}
+	params["min_level"] = strconv.Itoa(level)
+	params["max_level"] = strconv.Itoa(level + opts.LevelRange)
 
-			//time.Sleep(time.Duration(1+rand.Intn(10)) * time.Second)
-			//url = fmt.Sprintf("%s/quicksell/item/%s", config.BaseURL, item.IDObject)
-			//_, err = HttpCall("POST", url)
-			//if err != nil {
-			//	log.Printf("Error selling item %s: %v", item.IDObject, err)
-			//}
-			//log.Printf("Sold item: %s gold earned: %.0f", item.String(), item.Diff())
+	for page := 1; page <= opts.MaxPages; page++ {
+		time.Sleep(time.Duration(1+rand.Intn(2)) * time.Second)
+		params["page"] = strconv.Itoa(page)
+		url := models.ListItemsURL{Url: opts.URLListItems.Url, Params: params}.String()
+
+		body, err := httpClient.Do("GET", url)
+		if err != nil {
+			log.Printf("Error fetching level %d, page %d: %v", level, page, err)
+			continue
 		}
+
+		html := string(body)
+		if CheckTooQuickErrorPage(html) {
+			log.Printf("Rate limited: increase wait time between calls")
+			continue
+		}
+
+		items := parseMarketPage(store, html)
+		if len(items) == 0 {
+			log.Printf("No data for level %d-%d, page %d. Skipping remaining pages.", level, level+opts.LevelRange, page)
+			break
+		}
+
+		logItems(items, page, opts.ShowAll)
+		buyProfitableItems(httpClient, baseURL, items)
 	}
 }
 
-func CalculateDiffGold(idObjects []string, idItems []string, levels []string, goldAmounts []string, rarities []string, typeObjects []string) []models.MarketItem {
-	var itemList []models.MarketItem
-	if len(idObjects) != len(goldAmounts) {
-		log.Printf("Alert: idObject and golds have different lengths (idObject: %d, golds: %d)", len(idObjects), len(goldAmounts))
-		return itemList
+func parseMarketPage(store keystore.KeyValueStore, body string) []models.MarketItem {
+	idObjects := ExtractIdObject(body)
+	idItems := ExtractIdItems(body)
+	levels := ExtractLevels(body)
+	golds := ExtractGoldAmounts(body)
+	rarities := ExtractRarity(body)
+	types := ExtractTypeObject(body)
+
+	n := smallestLen(idObjects, idItems, levels, golds, rarities, types)
+	if n == 0 {
+		return nil
 	}
 
-	for i := range idObjects {
-		id := idObjects[i]
-		valueStr, found, _ := keystore.Database.Get(id)
-		if !found {
-			log.Printf("Item %s not found in database", id)
+	items := make([]models.MarketItem, 0, n)
+	for i := 0; i < n; i++ {
+		valueStr, _, err := store.Get(idObjects[i])
+		if err != nil {
+			log.Printf("Error reading item %s from store: %v", idObjects[i], err)
+			continue
 		}
 		value, _ := strconv.ParseFloat(valueStr, 64)
-		goldNum, _ := strconv.Atoi(goldAmounts[i])
-		itemList = append(itemList, models.MarketItem{ID: idItems[i], IDObject: idObjects[i], Level: levels[i], Gold: float64(goldNum), Value: value, Rarity: rarities[i], Type: typeObjects[i]})
+		goldNum, err := strconv.Atoi(golds[i])
+		if err != nil {
+			log.Printf("Invalid gold amount for item %s: %v", idItems[i], err)
+			continue
+		}
+		items = append(items, models.MarketItem{
+			ID: idItems[i], IDObject: idObjects[i],
+			Level: levels[i], Gold: float64(goldNum), Value: value,
+			Rarity: rarities[i], Type: types[i],
+		})
 	}
-	return itemList
+	return items
 }
 
-func showItemsByDiff(itemList []models.MarketItem, page int, showAll bool) {
-	for _, item := range itemList {
-		diff := item.Diff()
-		if diff > 15000 {
-			log.Printf("\033[96m Page: %v, %s \033[0m\n", page, item.String())
-		} else if diff >= 10000 {
-			log.Printf("\033[93m Page: %v, %s \033[0m\n", page, item.String())
-		// } else if diff >= 5000 {
-		// 	log.Printf("\033[92m Page: %v, %s \033[0m\n", page, item.String())
-		} else if diff >= 1000 {
-			log.Printf(" Page: %v, %s \n", page, item.String())
-		} else if showAll {
-			log.Printf(" Page: %v, %s \n", page, item.String())
-		} else if item.Rarity == "Celestial" && diff > -500000 {
-			log.Printf("\033[95m Page: %v, %s !!! Oportunity ¡¡¡ \033[0m\n", page, item.String())
+func buyProfitableItems(httpClient *HTTPClient, baseURL string, items []models.MarketItem) {
+	for _, item := range items {
+		if item.Diff() <= ProfitThresholdBuy {
+			continue
+		}
+		body, err := httpClient.Do("POST", fmt.Sprintf("%s/api/market/buy/%s", baseURL, item.ID))
+		if err != nil {
+			log.Printf("Error buying item %s: %v", item.ID, err)
+			continue
+		}
+		if strings.Contains(string(body), "Something went wrong") {
+			log.Printf("\033[91mInsufficient gold to buy item: %s (required: %v)\033[0m", item.ID, item.Gold)
+		} else {
+			log.Printf("Item bought successfully: %s --> profit: %v", item.ID, item.Diff())
 		}
 	}
 }
 
-func InspectItemValue(idGeneric string) float64 {
-
-	url := fmt.Sprintf("%s/item/inspect/%s", config.BaseURL, idGeneric)
-	body, err := HttpCall("GET", url)
-	if err != nil {
-		log.Fatalf("Error haciendo petición: %v", err)
+func logItems(items []models.MarketItem, page int, showAll bool) {
+	for _, item := range items {
+		diff := item.Diff()
+		switch {
+		case diff > ProfitThresholdBuy:
+			log.Printf("\033[96m Page: %v, %s \033[0m\n", page, item.String())
+		case diff >= ProfitThresholdHighlight:
+			log.Printf("\033[93m Page: %v, %s \033[0m\n", page, item.String())
+		case diff >= ProfitThresholdShow || showAll:
+			log.Printf(" Page: %v, %s \n", page, item.String())
+		case item.Rarity == "Celestial" && diff > CelestialMaxLoss:
+			log.Printf("\033[95m Page: %v, %s !!! Opportunity !!! \033[0m\n", page, item.String())
+		}
 	}
-	return ExtractInspectValue(string(body))
+}
+
+func inspectItemValue(httpClient *HTTPClient, baseURL, id string) (float64, error) {
+	body, err := httpClient.Do("GET", fmt.Sprintf("%s/item/inspect/%s", baseURL, id))
+	if err != nil {
+		return 0, fmt.Errorf("inspecting item %s: %w", id, err)
+	}
+	return ExtractInspectValue(string(body)), nil
+}
+
+func smallestLen(slices ...[]string) int {
+	if len(slices) == 0 {
+		return 0
+	}
+	m := len(slices[0])
+	for _, s := range slices[1:] {
+		if len(s) < m {
+			m = len(s)
+		}
+	}
+	return m
 }

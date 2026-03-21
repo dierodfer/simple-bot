@@ -2,48 +2,67 @@ package utils
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
-var Headers map[string]string
-var Cookie string
+const defaultHTTPTimeout = 30 * time.Second
 
-// HttpCall executes an HTTP request using the CurlRequest model.
-func HttpCall(method string, url string) ([]byte, error) {
-	client := &http.Client{}
+// HTTPClient wraps HTTP configuration for making authenticated requests.
+type HTTPClient struct {
+	headers map[string]string
+	cookie  string
+	client  *http.Client
+}
+
+// NewHTTPClient creates an HTTPClient by parsing headers and cookies from a curl-style command file.
+func NewHTTPClient(path string) (*HTTPClient, error) {
+	headers, cookie, err := parseCurlFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("parsing curl file: %w", err)
+	}
+
+	return &HTTPClient{
+		headers: headers,
+		cookie:  cookie,
+		client:  &http.Client{Timeout: defaultHTTPTimeout},
+	}, nil
+}
+
+// Do executes an HTTP request and returns the response body.
+func (c *HTTPClient) Do(method, url string) ([]byte, error) {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	for k, v := range Headers {
+	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
+	req.Header.Set("Cookie", c.cookie)
 
-	req.Header.Set("Cookie", Cookie)
-
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 	return body, nil
 }
 
-// InitHeadersAndCookie initializes the Headers and Cookie variables from a file containing curl command options.
-func InitHeadersAndCookie(path string) error {
+func parseCurlFile(path string) (map[string]string, string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	defer file.Close()
 
@@ -57,28 +76,17 @@ func InitHeadersAndCookie(path string) error {
 	content = strings.ReplaceAll(content, "^", "")
 	content = strings.TrimSpace(content)
 
-	headers := map[string]string{}
+	headers := make(map[string]string)
 	headerRegex := regexp.MustCompile(`-H\s+['"]([^:]+):\s?(.+?)['"]`)
 	for _, h := range headerRegex.FindAllStringSubmatch(content, -1) {
 		headers[h[1]] = h[2]
 	}
 
-	cookieRegex := regexp.MustCompile(`-b\s+['"](.+?)['"]`)
 	cookie := ""
+	cookieRegex := regexp.MustCompile(`-b\s+['"](.+?)['"]`)
 	if match := cookieRegex.FindStringSubmatch(content); len(match) == 2 {
 		cookie = match[1]
 	}
 
-	//method := "GET"
-	//if strings.Contains(content, "-X") {
-	//	methodRegex := regexp.MustCompile(`-X\s+['"]?(\w+)['"]?`)
-	//	if match := methodRegex.FindStringSubmatch(content); len(match) > 1 {
-	//		method = strings.ToUpper(match[1])
-	//	}
-	//}
-
-	Headers = headers
-	Cookie = cookie
-
-	return nil
+	return headers, cookie, nil
 }

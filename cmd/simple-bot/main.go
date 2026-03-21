@@ -1,28 +1,42 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"time"
+
 	config "simple-bot/configs"
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
 	"simple-bot/internal/utils"
-	"strconv"
-	"time"
 )
 
-var (
-	start        time.Time
-	urlListItems models.ListItemsURL
-)
+func main() {
+	start := time.Now()
 
-func init() {
-	start = time.Now()
-	config.InitVars()
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: simple-bot <inspect|analyze> [args...]")
+	}
 
-	urlListItems = models.ListItemsURL{
-		Url: config.BaseURL + "/market/listings",
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Error loading config: %v", err)
+	}
+
+	httpClient, err := utils.NewHTTPClient("call.txt")
+	if err != nil {
+		log.Fatalf("Error initializing HTTP client: %v", err)
+	}
+
+	store, err := keystore.NewStore("internal/database/data.db")
+	if err != nil {
+		log.Fatalf("Error initializing database: %v", err)
+	}
+	defer store.Close()
+
+	urlListItems := models.ListItemsURL{
+		Url: cfg.BaseURL + "/market/listings",
 		Params: map[string]string{
 			"type[0]":   "Armour",
 			"type[1]":   "Shield",
@@ -37,36 +51,38 @@ func init() {
 		},
 	}
 
-	err := utils.InitHeadersAndCookie("call.txt")
-	if err != nil {
-		log.Fatalf("Error leyendo curl: %v", err)
-	}
-
-	err = keystore.NewStore("internal/database/data.db")
-	if err != nil {
-		log.Fatal("Error to init database:", err)
-	}
-}
-
-func main() {
-	fmt.Println("Iniciando base de datos...")
-	defer keystore.Database.Close()
-
-	if len(os.Args) == 0 {
-		log.Fatal("Seleccione una acción: inspect o analyze")
-	}
-
 	switch os.Args[1] {
 	case "inspect":
-		initVal, _ := strconv.Atoi(os.Args[2])
-		endVal, _ := strconv.Atoi(os.Args[3])
-		log.Printf("Inspeccionando items en rango %d-%d...", initVal, endVal)
-		utils.AnalyzeInspectParallel(3, initVal, endVal)
+		if len(os.Args) < 4 {
+			log.Fatal("Usage: simple-bot inspect <start_id> <end_id>")
+		}
+		initVal, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			log.Fatalf("Invalid start ID %q: %v", os.Args[2], err)
+		}
+		endVal, err := strconv.Atoi(os.Args[3])
+		if err != nil {
+			log.Fatalf("Invalid end ID %q: %v", os.Args[3], err)
+		}
+		log.Printf("Inspecting items in range %d-%d...", initVal, endVal)
+		utils.AnalyzeInspectParallel(httpClient, store, cfg.BaseURL, 3, initVal, endVal)
+
 	case "analyze":
-		log.Printf("Analizando artículos recientes...")
-		utils.AnalyzeMarket(urlListItems, 1, 0, 5500, 500, 20, true, false)
+		log.Println("Analyzing recent market items...")
+		utils.AnalyzeMarket(httpClient, store, cfg.BaseURL, utils.MarketOptions{
+			URLListItems: urlListItems,
+			Threads:      1,
+			MinLevel:     0,
+			MaxLevel:     5500,
+			LevelRange:   500,
+			MaxPages:     20,
+			RecentItems:  true,
+			ShowAll:      false,
+		})
+
+	default:
+		log.Fatalf("Unknown command %q. Use 'inspect' or 'analyze'.", os.Args[1])
 	}
 
-	elapsed := time.Since(start)
-	log.Printf("Execution Time: %.3f seconds\n", elapsed.Seconds())
+	log.Printf("Execution Time: %.3f seconds\n", time.Since(start).Seconds())
 }

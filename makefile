@@ -18,7 +18,7 @@ go-build: go-download # Build the binary
 analyze-market: go-build # Run the binary
 	@go run cmd/simple-bot/main.go analyze > output.log
 
-inspect-items: go-build
+inspect-items: go-build # Inspect items in the given ID range and save results in bbdd locally
 ifeq ($(strip $(INIT)), )
 	$(error INIT is not set)
 endif

@@ -9,6 +9,7 @@ import (
 	config "simple-bot/configs"
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
+	"simple-bot/internal/ui"
 	"simple-bot/internal/utils"
 )
 
@@ -16,7 +17,7 @@ func main() {
 	start := time.Now()
 
 	if len(os.Args) < 2 {
-		log.Fatal("Usage: simple-bot <inspect|analyze> [args...]")
+		log.Fatal("Usage: simple-bot <inspect|analyze|ui> [args...]")
 	}
 
 	cfg, err := config.Load()
@@ -80,8 +81,22 @@ func main() {
 			ShowAll:      false,
 		})
 
+	case "ui":
+		if err := ui.Run(httpClient, store, cfg.BaseURL, utils.MarketOptions{
+			URLListItems: urlListItems,
+			Threads:      1,
+			MinLevel:     0,
+			MaxLevel:     5500,
+			LevelRange:   500,
+			MaxPages:     20,
+			RecentItems:  true,
+			ShowAll:      false,
+		}); err != nil {
+			log.Fatalf("UI error: %v", err)
+		}
+
 	default:
-		log.Fatalf("Unknown command %q. Use 'inspect' or 'analyze'.", os.Args[1])
+		log.Fatalf("Unknown command %q. Use 'inspect', 'analyze', or 'ui'.", os.Args[1])
 	}
 
 	log.Printf("Execution Time: %.3f seconds\n", time.Since(start).Seconds())

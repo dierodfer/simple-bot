@@ -15,6 +15,7 @@ import (
 	keystore "simple-bot/internal/database"
 	"simple-bot/internal/models"
 	"simple-bot/internal/utils"
+	"simple-bot/internal/version"
 )
 
 // Dark theme colors (Tokyo Night palette).
@@ -675,7 +676,7 @@ func (m Model) View() string {
 func (m Model) viewMenu() string {
 	var b strings.Builder
 	b.WriteString("\n")
-	b.WriteString(sTitle.Render("🤖 Simple Bot") + "\n")
+	b.WriteString(sTitle.Render("🤖 Simple Bot v"+version.AppVersion) + "\n")
 	b.WriteString(sDim.Render("   Market Analyzer") + "\n\n")
 
 	opts := []string{"⚔  Analyze Market", "🗄  Local DB", "✖  Quit"}
@@ -695,7 +696,7 @@ func (m Model) viewScan() string {
 	var b strings.Builder
 
 	// Title + scan status
-	title := sTitle.Render("🤖 Simple Bot")
+	title := sTitle.Render("🤖 Simple Bot v" + version.AppVersion)
 	if m.scanning {
 		title += "  " + m.spinner.View() + sStatus.Render(fmt.Sprintf(" Scanning... %d scanned • %d shown", m.scanned, len(m.items)))
 	} else if m.scanStop {

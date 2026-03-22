@@ -28,6 +28,7 @@ Simple Bot is a modern Go application for analyzing and automating item manageme
 - `inspect <start_id> <end_id>`: bulk inspect IDs and persist values
 - `analyze`: market analysis in terminal logs
 - `ui`: interactive TUI (scan + local DB management)
+- `version` (or `--version`, `-v`): prints current application version
 
 ## Internal Modules (Detailed)
 - `cmd/simple-bot/main.go`

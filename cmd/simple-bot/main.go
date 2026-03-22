@@ -11,14 +11,22 @@ import (
 	"simple-bot/internal/models"
 	"simple-bot/internal/ui"
 	"simple-bot/internal/utils"
+	"simple-bot/internal/version"
 )
 
 func main() {
 	start := time.Now()
 
 	if len(os.Args) < 2 {
-		log.Fatal("Usage: simple-bot <inspect|analyze|ui> [args...]")
+		log.Fatalf("Simple Bot v%s\\nUsage: simple-bot <inspect|analyze|ui|version> [args...]", version.AppVersion)
 	}
+
+	if os.Args[1] == "version" || os.Args[1] == "--version" || os.Args[1] == "-v" {
+		log.Printf("Simple Bot v%s", version.AppVersion)
+		return
+	}
+
+	log.Printf("Simple Bot v%s", version.AppVersion)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -96,7 +104,7 @@ func main() {
 		}
 
 	default:
-		log.Fatalf("Unknown command %q. Use 'inspect', 'analyze', or 'ui'.", os.Args[1])
+		log.Fatalf("Unknown command %q. Use 'inspect', 'analyze', 'ui', or 'version'.", os.Args[1])
 	}
 
 	log.Printf("Execution Time: %.3f seconds\n", time.Since(start).Seconds())

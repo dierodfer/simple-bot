@@ -1,0 +1,42 @@
+name: Sync Version On Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-version:
+    name: Sync App Version File
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Derive version from release tag
+        id: vars
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version="${tag#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Update internal version constant
+        run: |
+          sed -E -i 's/(AppVersion = ").*(")/\1${{ steps.vars.outputs.version }}\2/' internal/version/version.go
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet; then
+            echo "No version change needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add internal/version/version.go
+          git commit -m "chore: sync app version to ${{ steps.vars.outputs.version }}"
+          git push

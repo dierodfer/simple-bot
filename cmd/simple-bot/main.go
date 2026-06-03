@@ -38,7 +38,7 @@ func main() {
 		log.Fatalf("Error initializing HTTP client: %v", err)
 	}
 
-	store, err := keystore.NewStore("internal/database/data.db")
+	store, err := keystore.NewStore(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}

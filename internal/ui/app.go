@@ -116,8 +116,8 @@ type Model struct {
 	scanning   bool
 	scanDone   bool
 	scanStop   bool
-	scanCancel context.CancelFunc
-	itemCh     chan models.MarketItem
+	scanCancel     context.CancelFunc
+	itemCh         chan models.MarketItem
 	spinner    spinner.Model
 	width      int
 	height     int
@@ -137,7 +137,8 @@ type Model struct {
 	dbQuery    string
 	dbMessage  string
 	dbAction   string
-	dbRangeCh  chan tea.Msg
+	dbRangeCh     chan tea.Msg
+	dbRangeCancel context.CancelFunc
 }
 
 // shouldShow returns true if an item passes the display filter:
@@ -216,6 +217,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForDBRangeEvent(m.dbRangeCh)
 	case dbRangeDoneMsg:
 		m.dbRangeCh = nil
+		if m.dbRangeCancel != nil {
+			m.dbRangeCancel()
+			m.dbRangeCancel = nil
+		}
 		if msg.err != nil {
 			m.dbAction = sErr.Render("Range update error: " + msg.err.Error())
 			return m, nil
@@ -237,6 +242,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.scanCancel != nil {
 			m.scanCancel()
 			m.scanCancel = nil
+		}
+		if m.dbRangeCancel != nil {
+			m.dbRangeCancel()
+			m.dbRangeCancel = nil
 		}
 		return m, tea.Quit
 	}
@@ -345,8 +354,14 @@ func (m Model) handleDBKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.dbInput = dbInputNone
 			m.dbInputVal = ""
 			m.dbAction = sStatus.Render(fmt.Sprintf("Updating range %d-%d...", startID, endID))
+			if m.dbRangeCancel != nil {
+				m.dbRangeCancel()
+				m.dbRangeCancel = nil
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			m.dbRangeCancel = cancel
 			m.dbRangeCh = make(chan tea.Msg, 32)
-			go runDBRangeUpdate(m.httpClient, m.store, m.baseURL, startID, endID, m.dbRangeCh)
+			go runDBRangeUpdate(ctx, m.httpClient, m.store, m.baseURL, startID, endID, m.dbRangeCh)
 			return m, waitForDBRangeEvent(m.dbRangeCh)
 		case tea.KeyEsc:
 			m.dbInput = dbInputNone
@@ -593,18 +608,24 @@ func waitForDBRangeEvent(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
-func runDBRangeUpdate(httpClient *utils.HTTPClient, store keystore.KeyValueStore, baseURL string, startID, endID int, out chan<- tea.Msg) {
+func runDBRangeUpdate(ctx context.Context, httpClient *utils.HTTPClient, store keystore.KeyValueStore, baseURL string, startID, endID int, out chan<- tea.Msg) {
 	defer close(out)
 
 	entries, err := store.ListNumericRange(startID, endID)
 	if err != nil {
-		out <- dbRangeDoneMsg{startID: startID, endID: endID, err: err}
+		select {
+		case out <- dbRangeDoneMsg{startID: startID, endID: endID, err: err}:
+		case <-ctx.Done():
+		}
 		return
 	}
 
 	total := len(entries)
 	if total == 0 {
-		out <- dbRangeDoneMsg{startID: startID, endID: endID, updated: 0, failed: 0}
+		select {
+		case out <- dbRangeDoneMsg{startID: startID, endID: endID}:
+		case <-ctx.Done():
+		}
 		return
 	}
 
@@ -627,7 +648,12 @@ func runDBRangeUpdate(httpClient *utils.HTTPClient, store keystore.KeyValueStore
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case <-ctx.Done():
+				results <- rangeResult{key: entry.Key, err: ctx.Err()}
+				return
+			case sem <- struct{}{}:
+			}
 			defer func() { <-sem }()
 			_, refreshErr := utils.RefreshItemValue(httpClient, store, baseURL, entry.Key)
 			results <- rangeResult{key: entry.Key, err: refreshErr}
@@ -648,16 +674,27 @@ func runDBRangeUpdate(httpClient *utils.HTTPClient, store keystore.KeyValueStore
 			updated++
 		}
 
-		out <- dbRangeProgressMsg{
+		select {
+		case <-ctx.Done():
+			go func() {
+				for range results {
+				}
+			}()
+			return
+		case out <- dbRangeProgressMsg{
 			startID: startID,
 			endID:   endID,
 			current: current,
 			total:   total,
 			failed:  failed,
+		}:
 		}
 	}
 
-	out <- dbRangeDoneMsg{startID: startID, endID: endID, updated: updated, failed: failed}
+	select {
+	case out <- dbRangeDoneMsg{startID: startID, endID: endID, updated: updated, failed: failed}:
+	case <-ctx.Done():
+	}
 }
 
 // --- View ---
@@ -882,18 +919,7 @@ func parseIDRange(raw string) (int, int, error) {
 
 func isSearchTrigger(msg tea.KeyMsg) bool {
 	key := msg.String()
-	if key == "/" || key == "shift+7" || key == "?" || key == "f" || key == "F" {
-		return true
-	}
-	if strings.Contains(key, "/") {
-		return true
-	}
-	for _, r := range msg.Runes {
-		if r == '/' || r == '?' || r == 'f' || r == 'F' {
-			return true
-		}
-	}
-	return false
+	return key == "/" || key == "?" || key == "shift+7"
 }
 
 func keyHasRune(msg tea.KeyMsg, expected rune) bool {

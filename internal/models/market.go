@@ -7,6 +7,7 @@ import (
 
 const goodProfitRatio = 0.25
 
+// MarketItem represents an item listed on the game's market.
 type MarketItem struct {
 	ID       string
 	IDObject string
@@ -18,8 +19,8 @@ type MarketItem struct {
 }
 
 // Diff returns the difference between value and gold.
-func (lgr *MarketItem) Diff() float64 {
-	return lgr.Value - lgr.Gold
+func (item *MarketItem) Diff() float64 {
+	return item.Value - item.Gold
 }
 
 // ProfitToValueRatio returns profit/value ratio in range [-inf, +inf].
@@ -41,6 +42,7 @@ func (item *MarketItem) IsCelestial() bool {
 	return strings.EqualFold(item.Rarity, "Celestial")
 }
 
+// hasGoodProfitRatio reports whether the item has positive profit and ratio >= 25%.
 func (item *MarketItem) hasGoodProfitRatio() bool {
 	return item.Diff() > 0 && item.ProfitToValueRatio() >= goodProfitRatio
 }
@@ -56,6 +58,7 @@ func (item *MarketItem) IsGoodCelestialDeal() bool {
 	return item.IsCelestial() && item.hasGoodProfitRatio()
 }
 
+// String returns a human-readable representation of the market item.
 func (item *MarketItem) String() string {
 	return fmt.Sprintf("Level %s ==> %.0f 🪙 | value: %.0f | profit: %.0f | id: %s | %s -- %s", item.Level, item.Gold, item.Value, item.Diff(), item.ID, item.Rarity, item.Type)
 }

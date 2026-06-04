@@ -53,7 +53,7 @@ func NewStore(path string) (*Store, error) {
 		return nil
 	})
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -104,6 +104,7 @@ func compareEntries(a, b Entry) bool {
 	return a.Key < b.Key
 }
 
+// collectSortedEntries returns all entries matching query, sorted by numeric key when possible.
 func (s *Store) collectSortedEntries(query string) ([]Entry, error) {
 	query = strings.TrimSpace(query)
 	entries := make([]Entry, 0)

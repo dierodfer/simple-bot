@@ -93,19 +93,25 @@ func AnalyzeMarket(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL
 	wg.Wait()
 }
 
-func processLevelRange(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions, level int) {
-	params := CopyParams(opts.URLListItems.Params)
+// buildLevelParams returns a copy of base params with level range and ordering applied.
+func buildLevelParams(base map[string]string, opts MarketOptions, level int) map[string]string {
+	params := CopyParams(base)
 	if opts.RecentItems {
 		params["order"] = "desc"
 		params["order_col"] = "date"
 	}
 	params["min_level"] = strconv.Itoa(level)
 	params["max_level"] = strconv.Itoa(level + opts.LevelRange)
+	return params
+}
+
+func processLevelRange(httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions, level int) {
+	params := buildLevelParams(opts.URLListItems.Params, opts, level)
 
 	for page := 1; page <= opts.MaxPages; page++ {
 		time.Sleep(time.Duration(1+rand.Intn(2)) * time.Second)
 		params["page"] = strconv.Itoa(page)
-		url := models.ListItemsURL{Url: opts.URLListItems.Url, Params: params}.String()
+		url := models.ListItemsURL{URL: opts.URLListItems.URL, Params: params}.String()
 
 		body, err := httpClient.Do("GET", url)
 		if err != nil {
@@ -131,8 +137,8 @@ func processLevelRange(httpClient *HTTPClient, store keystore.KeyValueStore, bas
 }
 
 func parseMarketPage(store keystore.KeyValueStore, body string) []models.MarketItem {
-	idObjects := ExtractIdObject(body)
-	idItems := ExtractIdItems(body)
+	idObjects := ExtractIDObject(body)
+	idItems := ExtractIDItems(body)
 	levels := ExtractLevels(body)
 	golds := ExtractGoldAmounts(body)
 	rarities := ExtractRarity(body)
@@ -145,9 +151,12 @@ func parseMarketPage(store keystore.KeyValueStore, body string) []models.MarketI
 
 	items := make([]models.MarketItem, 0, n)
 	for i := 0; i < n; i++ {
-		valueStr, _, err := store.Get(idObjects[i])
+		valueStr, found, err := store.Get(idObjects[i])
 		if err != nil {
 			log.Printf("Error reading item %s from store: %v", idObjects[i], err)
+			continue
+		}
+		if !found {
 			continue
 		}
 		value, _ := strconv.ParseFloat(valueStr, 64)
@@ -219,20 +228,14 @@ func ScanMarket(ctx context.Context, httpClient *HTTPClient, store keystore.KeyV
 }
 
 func scanLevelRange(ctx context.Context, httpClient *HTTPClient, store keystore.KeyValueStore, baseURL string, opts MarketOptions, level int, itemCh chan<- models.MarketItem) bool {
-	params := CopyParams(opts.URLListItems.Params)
-	if opts.RecentItems {
-		params["order"] = "desc"
-		params["order_col"] = "date"
-	}
-	params["min_level"] = strconv.Itoa(level)
-	params["max_level"] = strconv.Itoa(level + opts.LevelRange)
+	params := buildLevelParams(opts.URLListItems.Params, opts, level)
 
 	for page := 1; page <= opts.MaxPages; page++ {
 		if !sleepWithContext(ctx, time.Duration(1+rand.Intn(2))*time.Second) {
 			return false
 		}
 		params["page"] = strconv.Itoa(page)
-		url := models.ListItemsURL{Url: opts.URLListItems.Url, Params: params}.String()
+		url := models.ListItemsURL{URL: opts.URLListItems.URL, Params: params}.String()
 
 		body, err := httpClient.Do("GET", url)
 		if err != nil {

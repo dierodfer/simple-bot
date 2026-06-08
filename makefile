@@ -16,7 +16,7 @@ go-build: go-download # Build the binary
 	@go build -o dev/simple-bot ./cmd/simple-bot
 
 analyze-market: go-build # Run the binary
-	@go run cmd/simple-bot/main.go analyze > output.log
+	@./dev/simple-bot analyze > output.log
 
 inspect-items: go-build # Inspect items in the given ID range and save results in bbdd locally
 ifeq ($(strip $(INIT)), )
@@ -25,7 +25,7 @@ endif
 ifeq ($(strip $(END)), )
 	$(error END is not set)
 endif
-	@go run cmd/simple-bot/main.go inspect $(INIT) $(END) > output.log
+	@./dev/simple-bot inspect $(INIT) $(END) > output.log
 
 fill-baseurl:
 	@echo "APP_BASE_URL=$(URL)" > .env || touch .env

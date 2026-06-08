@@ -2,30 +2,22 @@ package models
 
 import (
 	"net/url"
-	"strings"
 )
 
+// ListItemsURL represents a URL with optional query parameters for the market listings API.
 type ListItemsURL struct {
-	Url    string
+	URL    string
 	Params map[string]string
 }
 
+// String returns the full URL string with query parameters encoded alphabetically.
 func (l ListItemsURL) String() string {
 	if len(l.Params) == 0 {
-		return l.Url
+		return l.URL
 	}
-	var sb strings.Builder
-	sb.WriteString(l.Url)
-	sb.WriteString("?")
-	i := 0
+	vals := url.Values{}
 	for k, v := range l.Params {
-		if i > 0 {
-			sb.WriteString("&")
-		}
-		sb.WriteString(url.QueryEscape(k))
-		sb.WriteString("=")
-		sb.WriteString(url.QueryEscape(v))
-		i++
+		vals.Set(k, v)
 	}
-	return sb.String()
+	return l.URL + "?" + vals.Encode()
 }

@@ -28,6 +28,22 @@ func main() {
 
 	log.Printf("Simple Bot v%s", version.AppVersion)
 
+	var inspectStart, inspectEnd int
+	if os.Args[1] == "inspect" {
+		if len(os.Args) < 4 {
+			log.Fatal("Usage: simple-bot inspect <start_id> <end_id>")
+		}
+		var err error
+		inspectStart, err = strconv.Atoi(os.Args[2])
+		if err != nil {
+			log.Fatalf("Invalid start ID %q: %v", os.Args[2], err)
+		}
+		inspectEnd, err = strconv.Atoi(os.Args[3])
+		if err != nil {
+			log.Fatalf("Invalid end ID %q: %v", os.Args[3], err)
+		}
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
@@ -38,14 +54,13 @@ func main() {
 		log.Fatalf("Error initializing HTTP client: %v", err)
 	}
 
-	store, err := keystore.NewStore("internal/database/data.db")
+	store, err := keystore.NewStore(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
-	defer store.Close()
 
 	urlListItems := models.ListItemsURL{
-		Url: cfg.BaseURL + "/market/listings",
+		URL: cfg.BaseURL + "/market/listings",
 		Params: map[string]string{
 			"type[0]":   "Armour",
 			"type[1]":   "Shield",
@@ -62,19 +77,8 @@ func main() {
 
 	switch os.Args[1] {
 	case "inspect":
-		if len(os.Args) < 4 {
-			log.Fatal("Usage: simple-bot inspect <start_id> <end_id>")
-		}
-		initVal, err := strconv.Atoi(os.Args[2])
-		if err != nil {
-			log.Fatalf("Invalid start ID %q: %v", os.Args[2], err)
-		}
-		endVal, err := strconv.Atoi(os.Args[3])
-		if err != nil {
-			log.Fatalf("Invalid end ID %q: %v", os.Args[3], err)
-		}
-		log.Printf("Inspecting items in range %d-%d...", initVal, endVal)
-		utils.AnalyzeInspectParallel(httpClient, store, cfg.BaseURL, 3, initVal, endVal)
+		log.Printf("Inspecting items in range %d-%d...", inspectStart, inspectEnd)
+		utils.AnalyzeInspectParallel(httpClient, store, cfg.BaseURL, 3, inspectStart, inspectEnd)
 
 	case "analyze":
 		log.Println("Analyzing recent market items...")
@@ -100,12 +104,15 @@ func main() {
 			RecentItems:  true,
 			ShowAll:      false,
 		}); err != nil {
+			_ = store.Close()
 			log.Fatalf("UI error: %v", err)
 		}
 
 	default:
+		_ = store.Close()
 		log.Fatalf("Unknown command %q. Use 'inspect', 'analyze', 'ui', or 'version'.", os.Args[1])
 	}
 
+	_ = store.Close()
 	log.Printf("Execution Time: %.3f seconds\n", time.Since(start).Seconds())
 }

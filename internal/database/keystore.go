@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"go.etcd.io/bbolt"
+	berrors "go.etcd.io/bbolt/errors"
 )
 
 var defaultBucket = []byte("kv")
@@ -47,13 +48,13 @@ func NewStore(path string) (*Store, error) {
 		if _, err := tx.CreateBucketIfNotExists(defaultBucket); err != nil {
 			return err
 		}
-		if err := tx.DeleteBucket([]byte("on_market")); err != nil && err != bbolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket([]byte("on_market")); err != nil && err != berrors.ErrBucketNotFound {
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -104,6 +105,7 @@ func compareEntries(a, b Entry) bool {
 	return a.Key < b.Key
 }
 
+// collectSortedEntries returns all entries matching query, sorted by numeric key when possible.
 func (s *Store) collectSortedEntries(query string) ([]Entry, error) {
 	query = strings.TrimSpace(query)
 	entries := make([]Entry, 0)
@@ -184,11 +186,12 @@ func (s *Store) ListNumericRange(minID, maxID int) ([]Entry, error) {
 
 // Count returns the number of entries in the default bucket.
 func (s *Store) Count() (int, error) {
-	entries, err := s.collectSortedEntries("")
-	if err != nil {
-		return 0, err
-	}
-	return len(entries), nil
+	var count int
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		count = tx.Bucket(defaultBucket).Stats().KeyN
+		return nil
+	})
+	return count, err
 }
 
 // SearchPage returns up to limit entries whose key contains query,
@@ -204,11 +207,18 @@ func (s *Store) SearchPage(query string, offset, limit int) ([]Entry, error) {
 
 // CountSearch returns how many entries match query by key containment.
 func (s *Store) CountSearch(query string) (int, error) {
-	entries, err := s.collectSortedEntries(query)
-	if err != nil {
-		return 0, err
-	}
-	return len(entries), nil
+	query = strings.TrimSpace(query)
+	var count int
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		c := tx.Bucket(defaultBucket).Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			if strings.Contains(string(k), query) {
+				count++
+			}
+		}
+		return nil
+	})
+	return count, err
 }
 
 // Delete removes a key from the store.

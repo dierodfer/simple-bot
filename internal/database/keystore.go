@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"go.etcd.io/bbolt"
+	berrors "go.etcd.io/bbolt/errors"
 )
 
 var defaultBucket = []byte("kv")
@@ -47,7 +48,7 @@ func NewStore(path string) (*Store, error) {
 		if _, err := tx.CreateBucketIfNotExists(defaultBucket); err != nil {
 			return err
 		}
-		if err := tx.DeleteBucket([]byte("on_market")); err != nil && err != bbolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket([]byte("on_market")); err != nil && err != berrors.ErrBucketNotFound {
 			return err
 		}
 		return nil

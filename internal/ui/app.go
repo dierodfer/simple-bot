@@ -166,10 +166,12 @@ func newModel(httpClient *utils.HTTPClient, store keystore.KeyValueStore, baseUR
 	}
 }
 
+// Init starts the spinner animation and satisfies tea.Model.
 func (m Model) Init() tea.Cmd { return m.spinner.Tick }
 
 // --- Update ---
 
+// Update handles incoming messages and satisfies tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -699,6 +701,7 @@ func runDBRangeUpdate(ctx context.Context, httpClient *utils.HTTPClient, store k
 
 // --- View ---
 
+// View renders the current state and satisfies tea.Model.
 func (m Model) View() string {
 	switch m.state {
 	case stateMenu:
@@ -734,11 +737,12 @@ func (m Model) viewScan() string {
 
 	// Title + scan status
 	title := sTitle.Render("🤖 Simple Bot v" + version.AppVersion)
-	if m.scanning {
+	switch {
+	case m.scanning:
 		title += "  " + m.spinner.View() + sStatus.Render(fmt.Sprintf(" Scanning... %d scanned • %d shown", m.scanned, len(m.items)))
-	} else if m.scanStop {
+	case m.scanStop:
 		title += "  " + sErr.Render(fmt.Sprintf("■ Stopped • %d scanned • %d shown", m.scanned, len(m.items)))
-	} else if m.scanDone {
+	case m.scanDone:
 		title += "  " + sOk.Render(fmt.Sprintf("✓ Complete • %d scanned • %d shown", m.scanned, len(m.items)))
 	}
 	b.WriteString(title + "\n\n")

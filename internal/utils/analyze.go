@@ -111,7 +111,7 @@ func processLevelRange(httpClient *HTTPClient, store keystore.KeyValueStore, bas
 	for page := 1; page <= opts.MaxPages; page++ {
 		time.Sleep(time.Duration(1+rand.Intn(2)) * time.Second)
 		params["page"] = strconv.Itoa(page)
-		url := models.ListItemsURL{Url: opts.URLListItems.Url, Params: params}.String()
+		url := models.ListItemsURL{URL: opts.URLListItems.URL, Params: params}.String()
 
 		body, err := httpClient.Do("GET", url)
 		if err != nil {
@@ -137,8 +137,8 @@ func processLevelRange(httpClient *HTTPClient, store keystore.KeyValueStore, bas
 }
 
 func parseMarketPage(store keystore.KeyValueStore, body string) []models.MarketItem {
-	idObjects := ExtractIdObject(body)
-	idItems := ExtractIdItems(body)
+	idObjects := ExtractIDObject(body)
+	idItems := ExtractIDItems(body)
 	levels := ExtractLevels(body)
 	golds := ExtractGoldAmounts(body)
 	rarities := ExtractRarity(body)
@@ -235,7 +235,7 @@ func scanLevelRange(ctx context.Context, httpClient *HTTPClient, store keystore.
 			return false
 		}
 		params["page"] = strconv.Itoa(page)
-		url := models.ListItemsURL{Url: opts.URLListItems.Url, Params: params}.String()
+		url := models.ListItemsURL{URL: opts.URLListItems.URL, Params: params}.String()
 
 		body, err := httpClient.Do("GET", url)
 		if err != nil {

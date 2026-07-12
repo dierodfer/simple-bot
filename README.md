@@ -1,19 +1,14 @@
-![Go](https://img.shields.io/badge/Go-1.24.7-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)
 ![BoltDB](https://img.shields.io/badge/bbolt-1.4.3-4C8CBF?logo=sqlite&logoColor=white)
 
 # Simple Bot 🤖
 
-Simple Bot is a modern Go application for analyzing and automating item management in a live market in massive multiplayer online game (MMO).
+Simple Bot is a Go application for analyzing and automating item management in a live market in a massive multiplayer online game (MMO). It scans market listings, compares item value against cost, auto-buys profitable deals, and persists inspected item values in a local bbolt database — all driven from a single binary with a Bubble Tea terminal UI.
 
-## Features ✨
-- Analyze and compare market items and their values
-- Automatic buying and selling of items
-- Store and retrieve results in a fast local database
-- Bubble Tea terminal UI with market scan and DB operations
-- Capture and persist item `value` data
+![Simple Bot TUI menu](docs/screenshots/tui-menu.png)
 
 ## Requirements 📦
-- Go 1.24+
+- Go 1.26+
 - [bbolt](https://github.com/etcd-io/bbolt) for local storage
 
 ## Getting Started 🚀
@@ -37,13 +32,6 @@ Simple Bot is a modern Go application for analyzing and automating item manageme
 - `analyze`: market analysis in terminal logs
 - `ui`: interactive TUI (scan + local DB management)
 - `version` (or `--version`, `-v`): prints current application version
-
-## TUI Screenshots 📸
-| Main menu | Local DB browser |
-| --- | --- |
-| ![Main menu](docs/screenshots/tui-menu.png) | ![Local DB browser](docs/screenshots/tui-local-db.png) |
-
-The TUI (`ui` mode) opens on a menu to analyze the market or browse the local database. The DB view lets you page through stored item values, search by ID, update a single entry, or refresh a whole ID range.
 
 ## Internal Modules (Detailed)
 - `cmd/simple-bot/main.go`

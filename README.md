@@ -1,4 +1,4 @@
-![Go](https://img.shields.io/badge/Go-1.26.1-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.24.7-00ADD8?logo=go&logoColor=white)
 ![BoltDB](https://img.shields.io/badge/bbolt-1.4.3-4C8CBF?logo=sqlite&logoColor=white)
 
 # Simple Bot 🤖
@@ -13,15 +13,23 @@ Simple Bot is a modern Go application for analyzing and automating item manageme
 - Capture and persist item `value` data
 
 ## Requirements 📦
-- Go 1.18+
+- Go 1.24+
 - [bbolt](https://github.com/etcd-io/bbolt) for local storage
 
 ## Getting Started 🚀
 1. Clone the repository
-2. Copy `.env.template` to `.env` and set your environment variables
-3. Build and run the application:
+2. Copy `.env.template` to `.env` and set `APP_BASE_URL` (optionally `DB_PATH`, defaults to `internal/database/data.db`)
+3. Create a `call.txt` file with the raw `curl` command (headers + cookie) used to authenticate against the market API — copy it from your browser's dev tools ("Copy as cURL")
+4. Build and run the application:
    ```sh
-   go run ./cmd/simple-bot/main.go
+   go run ./cmd/simple-bot ui
+   ```
+
+   Or use the provided Makefile targets:
+   ```sh
+   make go-build                    # builds dev/simple-bot
+   make analyze-market               # runs analyze mode, logs to output.log
+   make inspect-items INIT=1 END=100 # runs inspect mode for an ID range
    ```
 
 ## Run Modes
@@ -29,6 +37,13 @@ Simple Bot is a modern Go application for analyzing and automating item manageme
 - `analyze`: market analysis in terminal logs
 - `ui`: interactive TUI (scan + local DB management)
 - `version` (or `--version`, `-v`): prints current application version
+
+## TUI Screenshots 📸
+| Main menu | Local DB browser |
+| --- | --- |
+| ![Main menu](docs/screenshots/tui-menu.png) | ![Local DB browser](docs/screenshots/tui-local-db.png) |
+
+The TUI (`ui` mode) opens on a menu to analyze the market or browse the local database. The DB view lets you page through stored item values, search by ID, update a single entry, or refresh a whole ID range.
 
 ## Internal Modules (Detailed)
 - `cmd/simple-bot/main.go`

@@ -1,27 +1,30 @@
-![Go](https://img.shields.io/badge/Go-1.26.1-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)
 ![BoltDB](https://img.shields.io/badge/bbolt-1.4.3-4C8CBF?logo=sqlite&logoColor=white)
 
 # Simple Bot 🤖
 
-Simple Bot is a modern Go application for analyzing and automating item management in a live market in massive multiplayer online game (MMO).
+Simple Bot is a Go application for analyzing and automating item management in a live market in a massive multiplayer online game (MMO). It scans market listings, compares item value against cost, auto-buys profitable deals, and persists inspected item values in a local bbolt database — all driven from a single binary with a Bubble Tea terminal UI.
 
-## Features ✨
-- Analyze and compare market items and their values
-- Automatic buying and selling of items
-- Store and retrieve results in a fast local database
-- Bubble Tea terminal UI with market scan and DB operations
-- Capture and persist item `value` data
+![Simple Bot TUI menu](docs/screenshots/tui-menu.png)
 
 ## Requirements 📦
-- Go 1.18+
+- Go 1.26+
 - [bbolt](https://github.com/etcd-io/bbolt) for local storage
 
 ## Getting Started 🚀
 1. Clone the repository
-2. Copy `.env.template` to `.env` and set your environment variables
-3. Build and run the application:
+2. Copy `.env.template` to `.env` and set `APP_BASE_URL` (optionally `DB_PATH`, defaults to `internal/database/data.db`)
+3. Create a `call.txt` file with the raw `curl` command (headers + cookie) used to authenticate against the market API — copy it from your browser's dev tools ("Copy as cURL")
+4. Build and run the application:
    ```sh
-   go run ./cmd/simple-bot/main.go
+   go run ./cmd/simple-bot ui
+   ```
+
+   Or use the provided Makefile targets:
+   ```sh
+   make go-build                    # builds dev/simple-bot
+   make analyze-market               # runs analyze mode, logs to output.log
+   make inspect-items INIT=1 END=100 # runs inspect mode for an ID range
    ```
 
 ## Run Modes

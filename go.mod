@@ -1,8 +1,8 @@
 module simple-bot
 
-go 1.24.2
+go 1.26.0
 
-toolchain go1.24.7
+toolchain go1.26.5
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
